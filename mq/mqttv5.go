@@ -23,8 +23,6 @@ var (
 	payloadFormat byte   = 1
 	messageExpiry uint32 = 600
 	stNotConnect         = false
-	ctxClose      context.Context
-	funClose      context.CancelFunc
 )
 
 var EmptyMQTTClientV5 = &MqttClientV5{
@@ -70,8 +68,8 @@ type MqttClientV5 struct {
 	client      *autopaho.ConnectionManager
 	failedCache *cache.AnyCache[*mqttMessage]
 	st          *bool
-	empty       bool
 	ctxCancel   context.CancelFunc
+	empty       bool
 }
 
 // Close close the mqtt client
@@ -273,16 +271,18 @@ func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte))
 			},
 		},
 	}
-	ctxClose, funClose = context.WithCancel(context.TODO())
+	ctxClose, funClose := context.WithCancel(context.TODO())
 	cm, err := autopaho.NewConnection(ctxClose, conf)
 	if err != nil {
 		opt.Logg.Error(opt.LogHeader + " new connection error: " + err.Error())
+		funClose()
 		return EmptyMQTTClientV5, err
 	}
 	ctx, cancel := context.WithTimeout(context.TODO(), time.Second*3)
 	defer cancel()
 	err = cm.AwaitConnection(ctx)
 	if err != nil {
+		funClose()
 		return EmptyMQTTClientV5, err
 	}
 

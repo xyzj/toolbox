@@ -124,27 +124,6 @@ func (arr *StringSliceSort) Less(i, j int) bool {
 	return arr1[arr.Idx] < arr2[arr.Idx]
 }
 
-// CacheMarshal 将数据进行序列化后压缩，可做数据缓存
-func CacheMarshal(v interface{}) ([]byte, error) {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return nil, err
-	}
-	return cacheCompress.Encode(b) // CompressData(b, ArchiveGZip), nil
-}
-
-// CacheUnmarshal 将压缩的数据反序列化，参数v必须专递结构地址
-func CacheUnmarshal(b []byte, v interface{}) error {
-	d, err := cacheCompress.Deocde(b)
-	if err != nil {
-		return err
-	}
-	if err := json.Unmarshal(d, v); err != nil {
-		return err
-	}
-	return nil
-}
-
 // GetAddrFromString get addr from config string
 //
 // straddr: something like "1,2,3-6"

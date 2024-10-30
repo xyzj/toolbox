@@ -4,7 +4,7 @@ go 1.21.0
 
 require (
 	github.com/bytedance/sonic v1.12.3
-	github.com/eclipse/paho.golang v0.21.0
+	github.com/eclipse/paho.golang v0.21.1-0.20241013013916-7474a8a85216
 	github.com/eclipse/paho.mqtt.golang v1.5.0
 	github.com/ethereum/go-ethereum v1.14.7
 	github.com/gin-contrib/cors v1.7.2
