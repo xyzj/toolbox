@@ -91,3 +91,37 @@ func AddPathEnvFromHere() error {
 	b.Close()
 	return nil
 }
+
+// MakeRuntimeDirs creates and returns the full paths for the configuration, log, and cache directories.
+// If the rootpath is ".", it uses the directories relative to the current executable's location.
+// If the rootpath is "..", it uses the directories relative to the parent directory of the current executable's location.
+// For any other rootpath, it creates the directories under the specified rootpath.
+//
+// Parameters:
+// rootpath (string): The root path for creating the directories.
+//
+// Returns:
+// string: The full path of the configuration directory.
+// string: The full path of the log directory.
+// string: The full path of the cache directory.
+func MakeRuntimeDirs(rootpath string) (string, string, string) {
+	var sconf, slog, scache string
+	switch rootpath {
+	case ".":
+		sconf = JoinPathFromHere("conf")
+		slog = JoinPathFromHere("log")
+		scache = JoinPathFromHere("cache")
+	case "..":
+		sconf = JoinPathFromHere("..", "conf")
+		slog = JoinPathFromHere("..", "log")
+		scache = JoinPathFromHere("..", "cache")
+	default:
+		sconf = filepath.Join(rootpath, "conf")
+		slog = filepath.Join(rootpath, "log")
+		scache = filepath.Join(rootpath, "cache")
+	}
+	os.MkdirAll(sconf, 0o775)
+	os.MkdirAll(slog, 0o775)
+	os.MkdirAll(scache, 0o775)
+	return sconf, slog, scache
+}

@@ -16,8 +16,6 @@ const (
 	logformaterWithName          = "%s [%s] %s"
 )
 
-var lineend = []byte{10}
-
 // Logger 日志接口
 type Logger interface {
 	Debug(msg string)

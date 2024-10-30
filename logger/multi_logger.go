@@ -2,6 +2,8 @@ package logger
 
 import (
 	"io"
+
+	"github.com/xyzj/toolbox/json"
 )
 
 type MultiLogger struct {
@@ -27,7 +29,7 @@ func (l *MultiLogger) writeLog(msg string, level LogLevel) {
 	// 写日志
 	for _, o := range l.outs {
 		if level >= o.LogLevel && o.Out != nil {
-			o.Out.Write(toBytes(msg))
+			o.Out.Write(json.Bytes(msg))
 		}
 	}
 }

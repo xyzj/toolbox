@@ -4,7 +4,6 @@ Package logger 日志专用写入器，可设置是否自动依据日期以及�
 package logger
 
 import (
-	"archive/zip"
 	"bytes"
 	"fmt"
 	"io"
@@ -12,9 +11,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"unsafe"
 
 	"github.com/xyzj/toolbox/crypto"
+	"github.com/xyzj/toolbox/json"
 	"github.com/xyzj/toolbox/loopfunc"
 	"github.com/xyzj/toolbox/pathtool"
 )
@@ -24,6 +23,7 @@ const (
 	maxFileSize    = 1024 * 1024 // 100mb
 	// ShortTimeFormat 日志事件戳格式
 	ShortTimeFormat = "15:04:05.000 "
+	LongTimeFormat  = "2006-01-02 15:04:05.000 "
 )
 
 var (
@@ -52,7 +52,9 @@ type OptLog struct {
 }
 
 func (o *OptLog) ensureDefaults() {
-	if o.MaxDays > 0 || o.MaxSize > 0 {
+	if o.MaxDays == 0 && o.MaxSize == 0 {
+		o.AutoRoll = false
+	} else {
 		o.AutoRoll = true
 	}
 	if o.MaxSize < maxFileSize {
@@ -88,6 +90,10 @@ func NewWriter(opt *OptLog) io.Writer {
 		enablegz:    opt.CompressFile,
 		withFile:    opt.Filename != "",
 		delayWrite:  opt.DelayWrite,
+		timeFormat:  LongTimeFormat,
+	}
+	if opt.AutoRoll {
+		mylog.timeFormat = ShortTimeFormat
 	}
 	if opt.Filename != "" && opt.AutoRoll {
 		ymd := t.Format(fileTimeFormat)
@@ -119,6 +125,7 @@ type Writer struct {
 	nameNow     string
 	nameOld     string
 	logDir      string
+	timeFormat  string
 	expired     int64
 	fileMaxSize int64
 	fileDay     int
@@ -132,7 +139,7 @@ type Writer struct {
 
 // Write 异步写入日志，返回固定为 0, nil
 func (w *Writer) Write(p []byte) (n int, err error) {
-	xp := toBytes(time.Now().Format(ShortTimeFormat))
+	xp := json.Bytes(time.Now().Format(w.timeFormat))
 	xp = append(xp, p...)
 	if !bytes.HasSuffix(xp, lineEnd) {
 		xp = append(xp, lineEnd...)
@@ -213,7 +220,7 @@ func (w *Writer) newFile() {
 	var err error
 	w.fno, err = os.OpenFile(w.pathNow, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o664)
 	if err != nil {
-		os.WriteFile("logerr.log", toBytes("log file open error: "+err.Error()), 0o664)
+		os.WriteFile("logerr.log", []byte("log file open error: "+err.Error()), 0o664)
 		w.withFile = false
 		return
 	}
@@ -235,7 +242,7 @@ func (w *Writer) rolledWithFileSize() bool {
 	fs, ex := os.Stat(w.pathNow)
 	if ex == nil {
 		if fs.Size() > w.fileMaxSize {
-			if w.fileIndex >= 255 {
+			if w.fileIndex == 255 {
 				w.fileIndex = 0
 			} else {
 				w.fileIndex++
@@ -284,11 +291,6 @@ func (w *Writer) zipFile(s string) {
 			os.WriteFile(s+".zst", bb, 0o664)
 			time.Sleep(time.Second * 5)
 			os.Remove(s)
-			// err := zipFile(w.logDir, s, true)
-			// if err != nil {
-			// 	println("zip log file error: " + s + " " + err.Error())
-			// 	return
-			// }
 		}(xs)
 	}
 }
@@ -325,58 +327,4 @@ func (w *Writer) clearFile() {
 			}
 		}
 	}()
-}
-
-func zipFile(d, s string, delold bool) error {
-	zfile := filepath.Join(d, s+".zip")
-	ofile := filepath.Join(d, s)
-
-	newZipFile, err := os.Create(zfile)
-	if err != nil {
-		return err
-	}
-	defer newZipFile.Close()
-
-	zipWriter := zip.NewWriter(newZipFile)
-	defer zipWriter.Close()
-
-	zipfile, err := os.Open(ofile)
-	if err != nil {
-		return err
-	}
-	defer zipfile.Close()
-	info, err := zipfile.Stat()
-	if err != nil {
-		return err
-	}
-
-	header, err := zip.FileInfoHeader(info)
-	if err != nil {
-		return err
-	}
-	header.Method = zip.Deflate
-
-	writer, err := zipWriter.CreateHeader(header)
-	if err != nil {
-		return err
-	}
-	if _, err = io.Copy(writer, zipfile); err != nil {
-		return err
-	}
-	if delold {
-		go func(s string) {
-			time.Sleep(time.Second * 10)
-			os.Remove(s)
-		}(filepath.Join(d, s))
-	}
-	return nil
-}
-
-func toBytes(s string) []byte {
-	return *(*[]byte)(unsafe.Pointer(
-		&struct {
-			string
-			cap int
-		}{string: s, cap: len(s)},
-	))
 }

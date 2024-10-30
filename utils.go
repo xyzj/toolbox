@@ -6,18 +6,8 @@ package toolbox
 import (
 	"archive/zip"
 	"bytes"
-	"compress/gzip"
-	"compress/zlib"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/hmac"
-	"crypto/md5"
-	"crypto/sha1"
-	"crypto/sha256"
-	"crypto/sha512"
 	"encoding/base64"
 	"fmt"
-	"hash"
 	"hash/crc32"
 	"io"
 	"math/rand"
@@ -32,7 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/snappy"
 	"github.com/xyzj/toolbox/crypto"
 	"github.com/xyzj/toolbox/gocmd"
 	json "github.com/xyzj/toolbox/json"
@@ -58,40 +47,6 @@ const (
 	FileTimeFormat = "060102" // 日志文件命名格式
 )
 
-const (
-	// CryptoMD5 md5算法
-	CryptoMD5 = iota
-	// CryptoSHA256 sha256算法
-	CryptoSHA256
-	// CryptoSHA512 sha512算法
-	CryptoSHA512
-	// CryptoHMACSHA1 hmacsha1摘要算法
-	CryptoHMACSHA1
-	// CryptoHMACSHA256 hmacsha256摘要算法
-	CryptoHMACSHA256
-	// CryptoAES128CBC aes128cbc算法
-	CryptoAES128CBC
-	// CryptoAES128CFB aes128cfb算法
-	CryptoAES128CFB
-	// CryptoAES192CBC aes192cbc算法
-	CryptoAES192CBC
-	// CryptoAES192CFB aes192cfb算法
-	CryptoAES192CFB
-	// CryptoAES256CBC aes256cbc算法
-	CryptoAES256CBC
-	// CryptoAES256CFB aes256cfb算法
-	CryptoAES256CFB
-)
-
-// CryptoWorker 序列化或加密管理器
-type CryptoWorker struct {
-	cryptoType   byte
-	cryptoHash   hash.Hash
-	cryptoLocker sync.Mutex
-	cryptoIV     []byte
-	cryptoBlock  cipher.Block
-}
-
 var (
 	// DefaultLogDir 默认日志文件夹
 	DefaultLogDir = filepath.Join(pathtool.GetExecDir(), "..", "log")
@@ -99,303 +54,9 @@ var (
 	DefaultCacheDir = filepath.Join(pathtool.GetExecDir(), "..", "cache")
 	// DefaultConfDir 默认配置文件夹
 	DefaultConfDir = filepath.Join(pathtool.GetExecDir(), "..", "conf")
+
+	cacheCompress = crypto.NewCompressor(crypto.CompressZstd)
 )
-
-// GetNewCryptoWorker 获取新的序列化或加密管理器，已过时，使用github.com/xyzj/toolbox/crypto包
-func GetNewCryptoWorker(cryptoType byte) *CryptoWorker {
-	h := &CryptoWorker{
-		cryptoType: cryptoType,
-	}
-	switch cryptoType {
-	case CryptoMD5:
-		h.cryptoHash = md5.New()
-	case CryptoSHA256:
-		h.cryptoHash = sha256.New()
-	case CryptoSHA512:
-		h.cryptoHash = sha512.New()
-	case CryptoHMACSHA1:
-		h.cryptoHash = hmac.New(sha1.New, []byte{})
-	case CryptoHMACSHA256:
-		h.cryptoHash = hmac.New(sha256.New, []byte{})
-	}
-	return h
-}
-
-func pkcs5Padding(ciphertext []byte, blockSize int) []byte {
-	padding := blockSize - len(ciphertext)%blockSize
-	padtext := bytes.Repeat([]byte{byte(padding)}, padding)
-	return append(ciphertext, padtext...)
-}
-
-func pkcs5Unpadding(encrypt []byte) []byte {
-	padding := encrypt[len(encrypt)-1]
-	return encrypt[:len(encrypt)-int(padding)]
-}
-
-// SetKey 设置aes-key,iv，已过时，使用github.com/xyzj/toolbox/crypto包
-func (h *CryptoWorker) SetKey(key, iv string) error {
-	switch h.cryptoType {
-	case CryptoHMACSHA1:
-		h.cryptoHash = hmac.New(sha1.New, json.Bytes(key))
-	case CryptoHMACSHA256:
-		h.cryptoHash = hmac.New(sha256.New, json.Bytes(key))
-	case CryptoAES128CBC:
-		if len(key) < 16 || len(iv) < 16 {
-			return fmt.Errorf("key length must be longer than 16, and the length of iv must be 16")
-		}
-		h.cryptoBlock, _ = aes.NewCipher(json.Bytes(key)[:16])
-		h.cryptoIV = json.Bytes(iv)[:16]
-	case CryptoAES192CBC:
-		if len(key) < 24 || len(iv) < 16 {
-			return fmt.Errorf("key length must be longer than 24, and the length of iv must be 16")
-		}
-
-		h.cryptoBlock, _ = aes.NewCipher(json.Bytes(key)[:24])
-		h.cryptoIV = json.Bytes(iv)[:16]
-	case CryptoAES256CBC:
-		if len(key) < 32 || len(iv) < 16 {
-			return fmt.Errorf("key length must be longer than 32, and the length of iv must be 16")
-		}
-		h.cryptoBlock, _ = aes.NewCipher(json.Bytes(key)[:32])
-		h.cryptoIV = json.Bytes(iv)[:16]
-	case CryptoAES128CFB:
-		if len(key) < 16 || len(iv) < 16 {
-			return fmt.Errorf("key length must be longer than 16, and the length of iv must be 16")
-		}
-		h.cryptoBlock, _ = aes.NewCipher(json.Bytes(key)[:16])
-		h.cryptoIV = json.Bytes(iv)[:16]
-	case CryptoAES192CFB:
-		if len(key) < 24 || len(iv) < 16 {
-			return fmt.Errorf("key length must be longer than 24, and the length of iv must be 16")
-		}
-		h.cryptoBlock, _ = aes.NewCipher(json.Bytes(key)[:24])
-		h.cryptoIV = json.Bytes(iv)[:16]
-	case CryptoAES256CFB:
-		if len(key) < 32 || len(iv) < 16 {
-			return fmt.Errorf("key length must be longer than 32, and the length of iv must be 16")
-		}
-		h.cryptoBlock, _ = aes.NewCipher(json.Bytes(key)[:32])
-		h.cryptoIV = json.Bytes(iv)[:16]
-	default:
-		return fmt.Errorf("not yet supported")
-	}
-	return nil
-}
-
-// Encrypt 加密，已过时，使用github.com/xyzj/toolbox/crypto包
-func (h *CryptoWorker) Encrypt(s string) string {
-	// h.cryptoLocker.Lock()
-	// defer h.cryptoLocker.Unlock()
-	if len(h.cryptoIV) == 0 {
-		return ""
-	}
-	switch h.cryptoType {
-	case CryptoAES128CBC, CryptoAES192CBC, CryptoAES256CBC:
-		content := pkcs5Padding(json.Bytes(s), h.cryptoBlock.BlockSize())
-		crypted := make([]byte, len(content))
-		cipher.NewCBCEncrypter(h.cryptoBlock, h.cryptoIV).CryptBlocks(crypted, content)
-		return base64.StdEncoding.EncodeToString(crypted)
-	case CryptoAES128CFB, CryptoAES192CFB, CryptoAES256CFB:
-		crypted := make([]byte, aes.BlockSize+len(s))
-		cipher.NewCFBEncrypter(h.cryptoBlock, h.cryptoIV).XORKeyStream(crypted[aes.BlockSize:], json.Bytes(s))
-		return base64.StdEncoding.EncodeToString(crypted)
-	}
-	return ""
-}
-
-// EncryptNoTail 加密，去掉base64尾巴的=符号，已过时，使用github.com/xyzj/toolbox/crypto包
-func (h *CryptoWorker) EncryptNoTail(s string) string {
-	return strings.Replace(h.Encrypt(s), "=", "", -1)
-}
-
-// Decrypt 解密，已过时，使用github.com/xyzj/toolbox/crypto包
-func (h *CryptoWorker) Decrypt(s string) string {
-	// h.cryptoLocker.Lock()
-	// defer h.cryptoLocker.Unlock()
-	defer func() { recover() }()
-	if len(h.cryptoIV) == 0 {
-		return ""
-	}
-
-	if x := 4 - len(s)%4; x != 4 {
-		for i := 0; i < x; i++ {
-			s += "="
-		}
-	}
-	msg, _ := base64.StdEncoding.DecodeString(s)
-	switch h.cryptoType {
-	case CryptoAES128CBC, CryptoAES192CBC, CryptoAES256CBC:
-		decrypted := make([]byte, len(msg))
-		cipher.NewCBCDecrypter(h.cryptoBlock, h.cryptoIV).CryptBlocks(decrypted, msg)
-		return json.String(pkcs5Unpadding(decrypted))
-	case CryptoAES128CFB, CryptoAES192CFB, CryptoAES256CFB:
-		msg = msg[aes.BlockSize:]
-		cipher.NewCFBDecrypter(h.cryptoBlock, h.cryptoIV).XORKeyStream(msg, msg)
-		return json.String(msg)
-	}
-	return ""
-}
-
-// Hash 计算序列，已过时，使用github.com/xyzj/toolbox/crypto包
-func (h *CryptoWorker) Hash(b []byte) string {
-	h.cryptoLocker.Lock()
-	defer h.cryptoLocker.Unlock()
-	switch h.cryptoType {
-	case CryptoMD5, CryptoSHA256, CryptoSHA512, CryptoHMACSHA1, CryptoHMACSHA256:
-		h.cryptoHash.Reset()
-		h.cryptoHash.Write(b)
-		return fmt.Sprintf("%x", h.cryptoHash.Sum(nil))
-	}
-	return ""
-}
-
-// HashB64 返回base64编码格式，已过时，使用github.com/xyzj/toolbox/crypto包
-func (h *CryptoWorker) HashB64(b []byte) string {
-	h.cryptoLocker.Lock()
-	defer h.cryptoLocker.Unlock()
-	switch h.cryptoType {
-	case CryptoMD5, CryptoSHA256, CryptoSHA512, CryptoHMACSHA1, CryptoHMACSHA256:
-		h.cryptoHash.Reset()
-		h.cryptoHash.Write(b)
-		return base64.StdEncoding.EncodeToString(h.cryptoHash.Sum(nil))
-	}
-	return ""
-}
-
-// GetMD5 生成32位md5字符串，已过时，使用github.com/xyzj/toolbox/crypto包
-func GetMD5(text string) string {
-	return crypto.GetMD5(text)
-}
-
-// ArchiveType 压缩编码类型
-type ArchiveType byte
-
-var (
-	// ArchiveZlib zlib压缩/解压缩
-	ArchiveZlib ArchiveType = 1
-	// ArchiveGZip gzip压缩/解压缩
-	ArchiveGZip ArchiveType = 2
-	// ArchiveSnappy snappy压缩，解压缩
-	ArchiveSnappy ArchiveType = 3
-)
-
-// ArchiveWorker 压缩管理器，避免重复New
-type ArchiveWorker struct {
-	archiveType      ArchiveType
-	in               *bytes.Reader
-	code             *bytes.Buffer
-	decode           *bytes.Buffer
-	gzipReader       *gzip.Reader
-	gzipWriter       *gzip.Writer
-	zlibReader       io.ReadCloser
-	zlibWriter       *zlib.Writer
-	snappyReader     *snappy.Reader
-	snappyWriter     *snappy.Writer
-	compressLocker   sync.Mutex
-	uncompressLocker sync.Mutex
-}
-
-// GetNewArchiveWorker 获取新的压缩管理器
-func GetNewArchiveWorker(archiveType ArchiveType) *ArchiveWorker {
-	a := &ArchiveWorker{
-		archiveType: archiveType,
-		in:          bytes.NewReader(nil),
-		code:        &bytes.Buffer{},
-		decode:      &bytes.Buffer{},
-	}
-	switch archiveType {
-	case ArchiveSnappy:
-		a.snappyReader = snappy.NewReader(a.in)
-		a.snappyWriter = snappy.NewBufferedWriter(a.code)
-	case ArchiveGZip:
-		a.gzipReader, _ = gzip.NewReader(a.in)
-		a.gzipWriter = gzip.NewWriter(a.code)
-	default:
-		a.zlibReader, _ = zlib.NewReader(a.in)
-		a.zlibWriter = zlib.NewWriter(a.code)
-	}
-	return a
-}
-
-// Compress 压缩
-func (a *ArchiveWorker) Compress(src []byte) []byte {
-	a.compressLocker.Lock()
-	defer a.compressLocker.Unlock()
-	a.code.Reset()
-	switch a.archiveType {
-	case ArchiveSnappy:
-		a.snappyWriter.Reset(a.code)
-		a.snappyWriter.Write(src)
-		a.snappyWriter.Close()
-	case ArchiveGZip:
-		a.gzipWriter.Reset(a.code)
-		a.gzipWriter.Write(src)
-		a.gzipWriter.Close()
-	default: // zlib
-		a.zlibWriter.Reset(a.code)
-		a.zlibWriter.Write(src)
-		a.zlibWriter.Close()
-	}
-	return a.code.Bytes()
-}
-
-// Uncompress 解压缩
-func (a *ArchiveWorker) Uncompress(src []byte) []byte {
-	a.uncompressLocker.Lock()
-	defer a.uncompressLocker.Unlock()
-	a.decode.Reset()
-	switch a.archiveType {
-	case ArchiveSnappy:
-		io.Copy(a.decode, snappy.NewReader(bytes.NewReader(src)))
-	case ArchiveGZip:
-		b := bytes.NewReader(src)
-		r, _ := gzip.NewReader(b)
-		io.Copy(a.decode, r)
-	default: // zlib
-		a.in.Reset(src)
-		a.zlibReader, _ = zlib.NewReader(a.in)
-		io.Copy(a.decode, a.zlibReader)
-	}
-	return a.decode.Bytes()
-}
-
-// CompressData 使用gzip，zlib压缩数据
-func CompressData(src []byte, t ArchiveType) []byte {
-	in := &bytes.Buffer{}
-	switch t {
-	case ArchiveSnappy:
-		w := snappy.NewBufferedWriter(in)
-		w.Write(src)
-		w.Close()
-	case ArchiveGZip:
-		w := gzip.NewWriter(in)
-		w.Write(src)
-		w.Close()
-	default: // zlib
-		w := zlib.NewWriter(in)
-		w.Write(src)
-		w.Close()
-	}
-	return in.Bytes()
-}
-
-// UncompressData 使用gzip，zlib解压缩数据
-func UncompressData(src []byte, t ArchiveType, dstlen ...interface{}) []byte {
-	out := &bytes.Buffer{}
-	switch t {
-	case ArchiveSnappy:
-		io.Copy(out, snappy.NewReader(bytes.NewReader(src)))
-	case ArchiveGZip:
-		b := bytes.NewReader(src)
-		r, _ := gzip.NewReader(b)
-		io.Copy(out, r)
-	default: // zlib
-		b := bytes.NewReader(src)
-		r, _ := zlib.NewReader(b)
-		io.Copy(out, r)
-	}
-	return out.Bytes()
-}
 
 // Base64URLDecode url解码
 func Base64URLDecode(data string) ([]byte, error) {
@@ -469,12 +130,16 @@ func CacheMarshal(v interface{}) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return CompressData(b, ArchiveGZip), nil
+	return cacheCompress.Encode(b) // CompressData(b, ArchiveGZip), nil
 }
 
 // CacheUnmarshal 将压缩的数据反序列化，参数v必须专递结构地址
 func CacheUnmarshal(b []byte, v interface{}) error {
-	if err := json.Unmarshal(UncompressData(b, ArchiveGZip), v); err != nil {
+	d, err := cacheCompress.Deocde(b)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(d, v); err != nil {
 		return err
 	}
 	return nil
@@ -537,27 +202,6 @@ func CheckIP(ip string) bool {
 		return false
 	}
 	return a
-}
-
-// MakeRuntimeDirs make conf,log,cache dirs
-// Args：
-// rootpath： 输入路径
-// return：
-// conf，log，cache三个文件夹的完整路径
-func MakeRuntimeDirs(rootpath string) (string, string, string) {
-	var basepath string
-	switch rootpath {
-	case ".":
-		basepath = pathtool.GetExecDir()
-	case "..":
-		basepath = pathtool.JoinPathFromHere("..")
-	default:
-		basepath = rootpath
-	}
-	os.MkdirAll(filepath.Join(basepath, "conf"), 0o775)
-	os.MkdirAll(filepath.Join(basepath, "log"), 0o775)
-	os.MkdirAll(filepath.Join(basepath, "cache"), 0o775)
-	return filepath.Join(basepath, "conf"), filepath.Join(basepath, "log"), filepath.Join(basepath, "cache")
 }
 
 // CheckLrc check lrc data
@@ -725,27 +369,14 @@ func DecodeStringOld(s string) string {
 				ns.WriteByte(byte(int(z[i]) + 256 - int(x)))
 			}
 		}
-		return ReverseString(json.String(DoZlibUnCompress(ns.Bytes())))
+		zlibCompress := crypto.NewCompressor(crypto.CompressZlib)
+		b, err := zlibCompress.Deocde(ns.Bytes())
+		if err != nil {
+			return ""
+		}
+		return ReverseString(json.String(b))
 	}
 	return ""
-}
-
-// DoZlibUnCompress zlib uncompress
-func DoZlibUnCompress(src []byte) []byte {
-	b := bytes.NewReader(src)
-	var out bytes.Buffer
-	r, _ := zlib.NewReader(b)
-	io.Copy(&out, r)
-	return out.Bytes()
-}
-
-// DoZlibCompress zlib compress
-func DoZlibCompress(src []byte) []byte {
-	var in bytes.Buffer
-	w := zlib.NewWriter(&in)
-	w.Write(src)
-	w.Close()
-	return in.Bytes()
 }
 
 // SwapCase swap char case
@@ -819,20 +450,20 @@ func CalculateSecurityCode(t, salt string, offset int) []string {
 	switch t {
 	case "h":
 		sc = make([]string, 0, 3)
-		sc = append(sc, GetMD5(tt.Format("2006010215")+salt))
+		sc = append(sc, crypto.GetMD5(tt.Format("2006010215")+salt))
 		if mm < offset || 60-mm < offset {
-			sc = append(sc, GetMD5(tt.Add(-1*time.Hour).Format("2006010215")+salt))
-			sc = append(sc, GetMD5(tt.Add(time.Hour).Format("2006010215")+salt))
+			sc = append(sc, crypto.GetMD5(tt.Add(-1*time.Hour).Format("2006010215")+salt))
+			sc = append(sc, crypto.GetMD5(tt.Add(time.Hour).Format("2006010215")+salt))
 		}
 	case "m":
 		sc = make([]string, 0, offset*2)
 		if offset > 0 {
 			tts := tt.Add(time.Duration(-1*(offset)) * time.Minute)
 			for i := 0; i < offset*2+1; i++ {
-				sc = append(sc, GetMD5(tts.Add(time.Duration(i)*time.Minute).Format("200601021504")+salt))
+				sc = append(sc, crypto.GetMD5(tts.Add(time.Duration(i)*time.Minute).Format("200601021504")+salt))
 			}
 		} else {
-			sc = append(sc, GetMD5(tt.Format("200601021504")+salt))
+			sc = append(sc, crypto.GetMD5(tt.Format("200601021504")+salt))
 		}
 	}
 	return sc
@@ -861,86 +492,6 @@ func CheckSQLInject(s string) bool {
 	}
 	return re.MatchString(s)
 }
-
-// Bytes2Int64 字节数组转换为int64，bigOrder==true,高位在前
-// func Bytes2Int64(b []byte, bigOrder bool) int64 {
-// 	var l = len(b)
-// 	switch l {
-// 	case 1:
-// 		var tmp int8
-// 		bytesBuffer := bytes.NewBuffer(b)
-// 		if bigOrder {
-// 			binary.Read(bytesBuffer, binary.BigEndian, &tmp)
-// 		} else {
-// 			binary.Read(bytesBuffer, binary.LittleEndian, &tmp)
-// 		}
-// 		return int64(tmp)
-// 	case 2:
-// 		var tmp int16
-// 		bytesBuffer := bytes.NewBuffer(b)
-// 		if bigOrder {
-// 			binary.Read(bytesBuffer, binary.BigEndian, &tmp)
-// 		} else {
-// 			binary.Read(bytesBuffer, binary.LittleEndian, &tmp)
-// 		}
-// 		return int64(tmp)
-// 	case 3, 4:
-// 		var tmp int32
-// 		bytesBuffer := bytes.NewBuffer(b)
-// 		if bigOrder {
-// 			if l == 3 {
-// 				b = append([]byte{0}, b...)
-// 			}
-// 			binary.Read(bytesBuffer, binary.BigEndian, &tmp)
-// 		} else {
-// 			if l == 3 {
-// 				b = append(b, 0)
-// 			}
-// 			binary.Read(bytesBuffer, binary.LittleEndian, &tmp)
-// 		}
-// 		return int64(tmp)
-// 	case 5, 6, 7, 8:
-// 		var tmp int64
-// 		bytesBuffer := bytes.NewBuffer(b)
-// 		if bigOrder {
-// 			if l < 8 {
-// 				bb := make([]byte, 8-l)
-// 				b = append(bb, b...)
-// 			}
-// 			binary.Read(bytesBuffer, binary.BigEndian, &tmp)
-// 		} else {
-// 			if l < 8 {
-// 				bb := make([]byte, 8-l)
-// 				b = append(b, bb...)
-// 			}
-// 			binary.Read(bytesBuffer, binary.LittleEndian, &tmp)
-// 		}
-// 		return int64(tmp)
-// 	}
-// 	return 0
-// }
-
-// // Bytes2Uint64 字节数组转换为uint64，bigOrder==true,高位在前
-// func Bytes2Uint64(b []byte, bigOrder bool) uint64 {
-// 	var l int
-// 	if len(b) > 8 {
-// 		l = 0
-// 	} else {
-// 		l = 8 - len(b)
-// 	}
-// 	var bb = make([]byte, l)
-// 	if bigOrder {
-// 		bb = append(bb, b...)
-// 		b = bb
-// 	} else {
-// 		b = append(b, bb...)
-// 	}
-// 	if bigOrder {
-// 		return binary.BigEndian.Uint64(b)
-// 	} else {
-// 		return binary.LittleEndian.Uint64(b)
-// 	}
-// }
 
 // TrimString 去除字符串末尾的空格，\r\n
 func TrimString(s string) string {

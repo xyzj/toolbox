@@ -25,8 +25,6 @@ import (
 	"gorm.io/gorm"
 )
 
-var codeGzip = toolbox.GetNewArchiveWorker(toolbox.ArchiveGZip)
-
 // SQLInterface 数据库接口
 type SQLInterface interface {
 	IsReady() bool
