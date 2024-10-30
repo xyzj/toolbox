@@ -1,6 +1,10 @@
 package crypto
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/xyzj/toolbox/json"
+)
 
 func TestHash(t *testing.T) {
 	v := "kjhfksdfh2983u92fsdkfhakjdhf92837@#$^&*()"
@@ -15,6 +19,6 @@ func TestHash(t *testing.T) {
 	})
 	t.Run("hash sha1", func(t *testing.T) {
 		c := NewHash(HashSHA1)
-		println(c.Hash(Bytes(v)).HexString())
+		println(c.Hash(json.Bytes(v)).HexString())
 	})
 }

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto/ecies"
+	"github.com/xyzj/toolbox/json"
 	"github.com/xyzj/toolbox/pathtool"
 )
 
@@ -200,7 +201,7 @@ func (w *ECC) Decode(b []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return String(c), nil
+	return json.String(c), nil
 }
 
 // DecodeBase64 从base64字符串解码
@@ -263,7 +264,7 @@ func (w *ECC) Decrypt(s string) string {
 
 // Encrypt 加密，兼容旧方法，直接返回base64字符串
 func (w *ECC) Encrypt(s string) string {
-	x, err := w.Encode(Bytes(s))
+	x, err := w.Encode(json.Bytes(s))
 	if err != nil {
 		return ""
 	}
@@ -272,7 +273,7 @@ func (w *ECC) Encrypt(s string) string {
 
 // EncryptTo 加密字符串
 func (w *ECC) EncryptTo(s string) CValue {
-	x, err := w.Encode(Bytes(s))
+	x, err := w.Encode(json.Bytes(s))
 	if err != nil {
 		return EmptyValue
 	}

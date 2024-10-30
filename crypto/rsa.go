@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/xyzj/toolbox/json"
 	"github.com/xyzj/toolbox/pathtool"
 )
 
@@ -277,7 +278,7 @@ func (w *RSA) Decrypt(s string) string {
 
 // Encrypt 兼容旧方法，直接返回base64字符串
 func (w *RSA) Encrypt(s string) string {
-	x, err := w.Encode(Bytes(s))
+	x, err := w.Encode(json.Bytes(s))
 	if err != nil {
 		return ""
 	}
@@ -286,7 +287,7 @@ func (w *RSA) Encrypt(s string) string {
 
 // EncryptTo 兼容旧方法，直接返回base64字符串
 func (w *RSA) EncryptTo(s string) CValue {
-	x, err := w.Encode(Bytes(s))
+	x, err := w.Encode(json.Bytes(s))
 	if err != nil {
 		return EmptyValue
 	}

@@ -19,6 +19,7 @@ import (
 	"github.com/tjfoc/gmsm/sm2"
 	"github.com/tjfoc/gmsm/sm4"
 	"github.com/tjfoc/gmsm/x509"
+	"github.com/xyzj/toolbox/json"
 	"github.com/xyzj/toolbox/pathtool"
 )
 
@@ -184,7 +185,7 @@ func (w *SM2) Decode(b []byte) (string, error) {
 			return "", err
 		}
 	}
-	return String(c), nil
+	return json.String(c), nil
 }
 
 // DecodeBase64 从base64字符串解码
@@ -247,7 +248,7 @@ func (w *SM2) Decrypt(s string) string {
 
 // Encrypt 兼容旧方法，直接返回base64字符串
 func (w *SM2) Encrypt(s string) string {
-	x, err := w.Encode(Bytes(s))
+	x, err := w.Encode(json.Bytes(s))
 	if err != nil {
 		return ""
 	}
@@ -256,7 +257,7 @@ func (w *SM2) Encrypt(s string) string {
 
 // EncryptTo 兼容旧方法，直接返回base64字符串
 func (w *SM2) EncryptTo(s string) CValue {
-	x, err := w.Encode(Bytes(s))
+	x, err := w.Encode(json.Bytes(s))
 	if err != nil {
 		return EmptyValue
 	}
@@ -462,7 +463,7 @@ func (w *SM4) Decode(b []byte) (string, error) {
 	case SM4OFB:
 		bb, err = sm4.Sm4OFB(w.key, b, false)
 	}
-	return String(bb), err
+	return json.String(bb), err
 }
 
 // DecodeBase64 解密base64编码的字符串
@@ -482,7 +483,7 @@ func (w *SM4) Decrypt(s string) string {
 
 // Encrypt 兼容旧方法，直接返回base64字符串
 func (w *SM4) Encrypt(s string) string {
-	x, err := w.Encode(Bytes(s))
+	x, err := w.Encode(json.Bytes(s))
 	if err != nil {
 		return ""
 	}
@@ -491,7 +492,7 @@ func (w *SM4) Encrypt(s string) string {
 
 // EncryptTo 兼容旧方法，直接返回base64字符串
 func (w *SM4) EncryptTo(s string) CValue {
-	x, err := w.Encode(Bytes(s))
+	x, err := w.Encode(json.Bytes(s))
 	if err != nil {
 		return EmptyValue
 	}

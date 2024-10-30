@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/xyzj/toolbox/crypto"
+	json "github.com/xyzj/toolbox/json"
 )
 
 // A Time represents a time as the number of 100's of nanoseconds since 15 Oct
@@ -139,7 +140,7 @@ func GetUUID1() string {
 	now, seq, err := getTime()
 	if err != nil {
 		encodeHex(buf[:], crypto.GetRandom(16))
-		return String(buf[:])
+		return json.String(buf[:])
 	}
 
 	timeLow := uint32(now & 0xffffffff)
@@ -160,5 +161,5 @@ func GetUUID1() string {
 	nodeMu.Unlock()
 
 	encodeHex(buf[:], uuid[:])
-	return String(buf[:])
+	return json.String(buf[:])
 }

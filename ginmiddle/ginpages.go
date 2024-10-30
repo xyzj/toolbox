@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/xyzj/toolbox"
+	json "github.com/xyzj/toolbox/json"
 )
 
 //go:embed favicon.webp
@@ -141,7 +142,7 @@ func Clearlog(c *gin.Context) {
 	}
 	lstfno, ex := os.ReadDir(dir)
 	if ex != nil {
-		os.WriteFile("ginlogerr.log", toolbox.Bytes(fmt.Sprintf("clear log files error: %s", ex.Error())), 0o664)
+		os.WriteFile("ginlogerr.log", json.Bytes(fmt.Sprintf("clear log files error: %s", ex.Error())), 0o664)
 	}
 	t := time.Now()
 	for _, d := range lstfno {

@@ -10,7 +10,8 @@ import (
 	"io"
 	"os"
 	"strings"
-	"unsafe"
+
+	"github.com/xyzj/toolbox/json"
 )
 
 var EmptyValue = CValue([]byte{})
@@ -125,44 +126,29 @@ type CertOpt struct {
 	OutPut string `json:"-"`
 }
 
-// String 内存地址转换[]byte
-func String(b []byte) string {
-	return *(*string)(unsafe.Pointer(&b))
-}
-
-// Bytes 内存地址转换string
-func Bytes(s string) []byte {
-	return *(*[]byte)(unsafe.Pointer(
-		&struct {
-			string
-			cap int
-		}{string: s, cap: len(s)},
-	))
-}
-
 // GetMD5 生成md5字符串
 func GetMD5(text string) string {
-	return md5hash.Hash(Bytes(text)).HexString()
+	return md5hash.Hash(json.Bytes(text)).HexString()
 }
 
 // GetSHA1 生成sha1字符串
 func GetSHA1(text string) string {
-	return sha1hash.Hash(Bytes(text)).HexString()
+	return sha1hash.Hash(json.Bytes(text)).HexString()
 }
 
 // GetSHA256 生成sha256字符串
 func GetSHA256(text string) string {
-	return sha256hash.Hash(Bytes(text)).HexString()
+	return sha256hash.Hash(json.Bytes(text)).HexString()
 }
 
 // GetSHA512 生成sha512字符串
 func GetSHA512(text string) string {
-	return sha512hash.Hash(Bytes(text)).HexString()
+	return sha512hash.Hash(json.Bytes(text)).HexString()
 }
 
 // GetSM3 生成sm3字符串
 func GetSM3(text string) string {
-	return sm3hash.Hash(Bytes(text)).HexString()
+	return sm3hash.Hash(json.Bytes(text)).HexString()
 }
 
 // GetRandom 获取随机数据

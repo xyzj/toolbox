@@ -10,7 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
-	"github.com/xyzj/toolbox"
+	json "github.com/xyzj/toolbox/json"
 )
 
 // var (
@@ -38,7 +38,7 @@ func Recovery() gin.HandlerFunc {
 				if gin.DefaultWriter != nil {
 					// stack := stack(3)
 					httpRequest, _ := httputil.DumpRequest(c.Request, false)
-					headers := strings.Split(toolbox.String(httpRequest), "\r\n")
+					headers := strings.Split(json.String(httpRequest), "\r\n")
 					for idx, header := range headers {
 						current := strings.Split(header, ":")
 						if current[0] == "Authorization" {
@@ -46,7 +46,7 @@ func Recovery() gin.HandlerFunc {
 						}
 					}
 					if brokenPipe {
-						fmt.Fprintf(gin.DefaultWriter, "%s\n%s\n", err, toolbox.String(httpRequest))
+						fmt.Fprintf(gin.DefaultWriter, "%s\n%s\n", err, json.String(httpRequest))
 					} else {
 						if xerr, ok := err.(error); ok {
 							fmt.Fprintf(gin.DefaultWriter, "[Recovery] %+v\n", errors.WithStack(xerr))

@@ -6,6 +6,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"sync"
+
+	"github.com/xyzj/toolbox/json"
 )
 
 // AES aes算法
@@ -48,7 +50,7 @@ func (w *AES) SetKeyIV(key, iv string) error {
 	if len(key) < l {
 		return fmt.Errorf("key length must be longer than %d", l)
 	}
-	biv := Bytes(iv)
+	biv := json.Bytes(iv)
 	switch w.workType {
 	case AES128ECB, AES192ECB, AES256ECB:
 	default:
@@ -61,7 +63,7 @@ func (w *AES) SetKeyIV(key, iv string) error {
 		}
 		w.iv = biv[:aes.BlockSize]
 	}
-	w.block, _ = aes.NewCipher(Bytes(key[:l]))
+	w.block, _ = aes.NewCipher(json.Bytes(key[:l]))
 	w.blockSize = w.block.BlockSize()
 	return nil
 }
@@ -112,16 +114,16 @@ func (w *AES) Decode(b []byte) (string, error) {
 	case AES128CBC, AES192CBC, AES256CBC:
 		decrypted := make([]byte, len(b))
 		cipher.NewCBCDecrypter(w.block, w.iv).CryptBlocks(decrypted, b)
-		return String(pkcs7Unpadding(decrypted)), nil
+		return json.String(pkcs7Unpadding(decrypted)), nil
 	case AES128CFB, AES192CFB, AES256CFB:
 		cipher.NewCFBDecrypter(w.block, w.iv).XORKeyStream(b, b)
-		return String(w.unpadding(b)), nil
+		return json.String(w.unpadding(b)), nil
 	case AES128ECB, AES192ECB, AES256ECB:
 		decrypted := make([]byte, len(b))
 		for bs, be := 0, w.blockSize; bs < len(b); bs, be = bs+w.blockSize, be+w.blockSize {
 			w.block.Decrypt(decrypted[bs:be], b[bs:be])
 		}
-		return String(w.unpadding(decrypted)), nil
+		return json.String(w.unpadding(decrypted)), nil
 	}
 	return "", fmt.Errorf("unsupport cipher type")
 }
@@ -143,7 +145,7 @@ func (w *AES) Decrypt(s string) string {
 
 // Encrypt 兼容旧方法，直接返回base64字符串
 func (w *AES) Encrypt(s string) string {
-	x, err := w.Encode(Bytes(s))
+	x, err := w.Encode(json.Bytes(s))
 	if err != nil {
 		return ""
 	}
@@ -152,7 +154,7 @@ func (w *AES) Encrypt(s string) string {
 
 // EncryptTo 兼容旧方法，直接返回base64字符串
 func (w *AES) EncryptTo(s string) CValue {
-	x, err := w.Encode(Bytes(s))
+	x, err := w.Encode(json.Bytes(s))
 	if err != nil {
 		return EmptyValue
 	}

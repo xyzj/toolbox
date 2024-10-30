@@ -343,7 +343,7 @@ func NewRMQProducer(opt *RabbitMQOpt, logg logger.Logger) *RMQProducer {
 // FormatMQBody 格式化日志输出
 func FormatMQBody(d []byte) string {
 	if json.Valid(d) {
-		return toolbox.String(d)
+		return json.String(d)
 	}
 	return strings.TrimSpace(strings.Map(func(r rune) rune {
 		if unicode.IsLetter(r) || unicode.IsDigit(r) {

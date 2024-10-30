@@ -15,8 +15,6 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"hash"
@@ -33,7 +31,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/golang/snappy"
 	"github.com/xyzj/toolbox/crypto"
@@ -139,46 +136,46 @@ func pkcs5Unpadding(encrypt []byte) []byte {
 func (h *CryptoWorker) SetKey(key, iv string) error {
 	switch h.cryptoType {
 	case CryptoHMACSHA1:
-		h.cryptoHash = hmac.New(sha1.New, Bytes(key))
+		h.cryptoHash = hmac.New(sha1.New, json.Bytes(key))
 	case CryptoHMACSHA256:
-		h.cryptoHash = hmac.New(sha256.New, Bytes(key))
+		h.cryptoHash = hmac.New(sha256.New, json.Bytes(key))
 	case CryptoAES128CBC:
 		if len(key) < 16 || len(iv) < 16 {
 			return fmt.Errorf("key length must be longer than 16, and the length of iv must be 16")
 		}
-		h.cryptoBlock, _ = aes.NewCipher(Bytes(key)[:16])
-		h.cryptoIV = Bytes(iv)[:16]
+		h.cryptoBlock, _ = aes.NewCipher(json.Bytes(key)[:16])
+		h.cryptoIV = json.Bytes(iv)[:16]
 	case CryptoAES192CBC:
 		if len(key) < 24 || len(iv) < 16 {
 			return fmt.Errorf("key length must be longer than 24, and the length of iv must be 16")
 		}
 
-		h.cryptoBlock, _ = aes.NewCipher(Bytes(key)[:24])
-		h.cryptoIV = Bytes(iv)[:16]
+		h.cryptoBlock, _ = aes.NewCipher(json.Bytes(key)[:24])
+		h.cryptoIV = json.Bytes(iv)[:16]
 	case CryptoAES256CBC:
 		if len(key) < 32 || len(iv) < 16 {
 			return fmt.Errorf("key length must be longer than 32, and the length of iv must be 16")
 		}
-		h.cryptoBlock, _ = aes.NewCipher(Bytes(key)[:32])
-		h.cryptoIV = Bytes(iv)[:16]
+		h.cryptoBlock, _ = aes.NewCipher(json.Bytes(key)[:32])
+		h.cryptoIV = json.Bytes(iv)[:16]
 	case CryptoAES128CFB:
 		if len(key) < 16 || len(iv) < 16 {
 			return fmt.Errorf("key length must be longer than 16, and the length of iv must be 16")
 		}
-		h.cryptoBlock, _ = aes.NewCipher(Bytes(key)[:16])
-		h.cryptoIV = Bytes(iv)[:16]
+		h.cryptoBlock, _ = aes.NewCipher(json.Bytes(key)[:16])
+		h.cryptoIV = json.Bytes(iv)[:16]
 	case CryptoAES192CFB:
 		if len(key) < 24 || len(iv) < 16 {
 			return fmt.Errorf("key length must be longer than 24, and the length of iv must be 16")
 		}
-		h.cryptoBlock, _ = aes.NewCipher(Bytes(key)[:24])
-		h.cryptoIV = Bytes(iv)[:16]
+		h.cryptoBlock, _ = aes.NewCipher(json.Bytes(key)[:24])
+		h.cryptoIV = json.Bytes(iv)[:16]
 	case CryptoAES256CFB:
 		if len(key) < 32 || len(iv) < 16 {
 			return fmt.Errorf("key length must be longer than 32, and the length of iv must be 16")
 		}
-		h.cryptoBlock, _ = aes.NewCipher(Bytes(key)[:32])
-		h.cryptoIV = Bytes(iv)[:16]
+		h.cryptoBlock, _ = aes.NewCipher(json.Bytes(key)[:32])
+		h.cryptoIV = json.Bytes(iv)[:16]
 	default:
 		return fmt.Errorf("not yet supported")
 	}
@@ -194,13 +191,13 @@ func (h *CryptoWorker) Encrypt(s string) string {
 	}
 	switch h.cryptoType {
 	case CryptoAES128CBC, CryptoAES192CBC, CryptoAES256CBC:
-		content := pkcs5Padding(Bytes(s), h.cryptoBlock.BlockSize())
+		content := pkcs5Padding(json.Bytes(s), h.cryptoBlock.BlockSize())
 		crypted := make([]byte, len(content))
 		cipher.NewCBCEncrypter(h.cryptoBlock, h.cryptoIV).CryptBlocks(crypted, content)
 		return base64.StdEncoding.EncodeToString(crypted)
 	case CryptoAES128CFB, CryptoAES192CFB, CryptoAES256CFB:
 		crypted := make([]byte, aes.BlockSize+len(s))
-		cipher.NewCFBEncrypter(h.cryptoBlock, h.cryptoIV).XORKeyStream(crypted[aes.BlockSize:], Bytes(s))
+		cipher.NewCFBEncrypter(h.cryptoBlock, h.cryptoIV).XORKeyStream(crypted[aes.BlockSize:], json.Bytes(s))
 		return base64.StdEncoding.EncodeToString(crypted)
 	}
 	return ""
@@ -230,11 +227,11 @@ func (h *CryptoWorker) Decrypt(s string) string {
 	case CryptoAES128CBC, CryptoAES192CBC, CryptoAES256CBC:
 		decrypted := make([]byte, len(msg))
 		cipher.NewCBCDecrypter(h.cryptoBlock, h.cryptoIV).CryptBlocks(decrypted, msg)
-		return String(pkcs5Unpadding(decrypted))
+		return json.String(pkcs5Unpadding(decrypted))
 	case CryptoAES128CFB, CryptoAES192CFB, CryptoAES256CFB:
 		msg = msg[aes.BlockSize:]
 		cipher.NewCFBDecrypter(h.cryptoBlock, h.cryptoIV).XORKeyStream(msg, msg)
-		return String(msg)
+		return json.String(msg)
 	}
 	return ""
 }
@@ -525,7 +522,7 @@ func CheckIP(ip string) bool {
 	regip := `^(1\d{2}|2[0-4]\d|25[0-5]|[1-9]\d|[1-9])\.(1\d{2}|2[0-4]\d|25[0-5]|[1-9]\d|\d)\.(1\d{2}|2[0-4]\d|25[0-5]|[1-9]\d|\d)\.(1\d{2}|2[0-4]\d|25[0-5]|[1-9]\d|\d)$`
 	regipwithport := `^(1\d{2}|2[0-4]\d|25[0-5]|[1-9]\d|[1-9])\.(1\d{2}|2[0-4]\d|25[0-5]|[1-9]\d|\d)\.(1\d{2}|2[0-4]\d|25[0-5]|[1-9]\d|\d)\.(1\d{2}|2[0-4]\d|25[0-5]|[1-9]\d|\d):\d{1,5}$`
 	if strings.Contains(ip, ":") {
-		a, ex := regexp.Match(regipwithport, Bytes(ip))
+		a, ex := regexp.Match(regipwithport, json.Bytes(ip))
 		if ex != nil {
 			return false
 		}
@@ -535,7 +532,7 @@ func CheckIP(ip string) bool {
 		}
 		return a
 	}
-	a, ex := regexp.Match(regip, Bytes(ip))
+	a, ex := regexp.Match(regip, json.Bytes(ip))
 	if ex != nil {
 		return false
 	}
@@ -667,7 +664,7 @@ func CodeString(s string) string {
 	l := len(s)
 	salt := crypto.GetRandom(l)
 	var y, z bytes.Buffer
-	for _, v := range Bytes(s) {
+	for _, v := range json.Bytes(s) {
 		y.WriteByte(v + x)
 	}
 	zz := y.Bytes()
@@ -728,7 +725,7 @@ func DecodeStringOld(s string) string {
 				ns.WriteByte(byte(int(z[i]) + 256 - int(x)))
 			}
 		}
-		return ReverseString(String(DoZlibUnCompress(ns.Bytes())))
+		return ReverseString(json.String(DoZlibUnCompress(ns.Bytes())))
 	}
 	return ""
 }
@@ -847,7 +844,7 @@ func GetRandomString(l int64, letteronly ...bool) string {
 	if len(letteronly) > 0 && letteronly[0] {
 		str = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 	}
-	bb := Bytes(str)
+	bb := json.Bytes(str)
 	var rs strings.Builder
 	for i := int64(0); i < l; i++ {
 		rs.WriteByte(bb[rand.Intn(len(bb))])
@@ -944,125 +941,6 @@ func CheckSQLInject(s string) bool {
 // 		return binary.LittleEndian.Uint64(b)
 // 	}
 // }
-
-func TLSConfigFromPEM(certpem, keypem, rootpem []byte) (*tls.Config, error) {
-	cliCrt, err := tls.X509KeyPair(certpem, keypem)
-	if err != nil {
-		return nil, err
-	}
-	tc := &tls.Config{
-		InsecureSkipVerify: true,
-		ClientAuth:         tls.NoClientCert,
-		CipherSuites: []uint16{
-			tls.TLS_AES_128_GCM_SHA256,
-			tls.TLS_AES_256_GCM_SHA384,
-			tls.TLS_CHACHA20_POLY1305_SHA256,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-		},
-		Certificates: []tls.Certificate{cliCrt},
-	}
-	if len(rootpem) == 0 {
-		return tc, nil
-	}
-	pool, err := x509.SystemCertPool()
-	if err != nil {
-		pool = x509.NewCertPool()
-	}
-	tc.ClientCAs = pool
-	if pool.AppendCertsFromPEM(rootpem) {
-		tc.ClientAuth = tls.RequireAndVerifyClientCert
-	}
-	return tc, nil
-}
-
-// GetServerTLSConfig 获取https配置
-//
-//	certfile: 服务端证书
-//	keyfile: 服务端key
-//	clientca: 双向验证时客户端根证书
-func GetServerTLSConfig(certfile, keyfile, rootca string) (*tls.Config, error) {
-	bcert, err := os.ReadFile(certfile)
-	if err != nil {
-		return nil, err
-	}
-	bkey, err := os.ReadFile(keyfile)
-	if err != nil {
-		return nil, err
-	}
-	broot, _ := os.ReadFile(rootca)
-	return TLSConfigFromPEM(bcert, bkey, broot)
-	// cliCrt, err := tls.LoadX509KeyPair(certfile, keyfile)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// tc := &tls.Config{
-	// 	ClientAuth: tls.NoClientCert,
-	// 	CipherSuites: []uint16{
-	// 		tls.TLS_AES_128_GCM_SHA256,
-	// 		tls.TLS_AES_256_GCM_SHA384,
-	// 		tls.TLS_CHACHA20_POLY1305_SHA256,
-	// 		tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
-	// 		tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
-	// 		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-	// 		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-	// 		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-	// 		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
-	// 		tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
-	// 		tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-	// 		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-	// 		tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-	// 		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-	// 		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-	// 		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-	// 	},
-	// 	Certificates: []tls.Certificate{cliCrt},
-	// }
-	// if clientca != "" {
-	// 	caCrt, err := os.ReadFile(clientca)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	pool, err := x509.SystemCertPool()
-	// 	if err != nil {
-	// 		pool = x509.NewCertPool()
-	// 	}
-	// 	if pool.AppendCertsFromPEM(caCrt) {
-	// 		tc.ClientCAs = pool
-	// 		tc.ClientAuth = tls.RequireAndVerifyClientCert
-	// 	}
-	// }
-	// return tc, nil
-}
-
-// GetClientTLSConfig 获取https配置
-//
-//	certfile: 双向验证时客户端证书
-//	keyfile: 双向验证时客户端key
-//	rootca: 服务端根证书
-func GetClientTLSConfig(certfile, keyfile, rootca string) (*tls.Config, error) {
-	bcert, err := os.ReadFile(certfile)
-	if err != nil {
-		return nil, err
-	}
-	bkey, err := os.ReadFile(keyfile)
-	if err != nil {
-		return nil, err
-	}
-	broot, _ := os.ReadFile(rootca)
-	return TLSConfigFromPEM(bcert, bkey, broot)
-}
 
 // TrimString 去除字符串末尾的空格，\r\n
 func TrimString(s string) string {
@@ -1352,24 +1230,6 @@ func LastSlice(s, sep string) string {
 	return s
 }
 
-// String 内存地址转换[]byte
-func String(b []byte) string {
-	return *(*string)(unsafe.Pointer(&b))
-}
-
-// Bytes 内存地址转换string
-func Bytes(s string) []byte {
-	return *(*[]byte)(unsafe.Pointer(
-		&struct {
-			string
-			cap int
-		}{s, len(s)},
-	))
-	// x := (*[2]uintptr)(unsafe.Pointer(&s))
-	// h := [3]uintptr{x[0], x[1], x[1]}
-	// return *(*[]byte)(unsafe.Pointer(&h))
-}
-
 // FormatFileSize 字节的单位转换
 func FormatFileSize(byteSize uint64) (size string) {
 	fileSize := float64(byteSize)
@@ -1412,12 +1272,12 @@ func PB2String(pb interface{}) string {
 	if err != nil {
 		return ""
 	}
-	return String(b)
+	return json.String(b)
 }
 
 // JSON2PB json字符串转pb2格式
 func JSON2PB(js string, pb interface{}) error {
-	err := json.Unmarshal(Bytes(js), &pb)
+	err := json.Unmarshal(json.Bytes(js), &pb)
 	return err
 }
 
