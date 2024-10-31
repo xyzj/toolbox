@@ -53,6 +53,7 @@ type HASH struct {
 func (w *HASH) Hash(b []byte) CValue {
 	h := w.pool.Get().(hash.Hash)
 	defer w.pool.Put(h)
+	h.Reset()
 	h.Write(b)
 	return CValue(h.Sum(nil))
 	// w.locker.Lock()
