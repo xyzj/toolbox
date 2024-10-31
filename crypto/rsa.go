@@ -16,7 +16,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/xyzj/toolbox/json"
@@ -32,7 +31,6 @@ var (
 
 // RSA rsa算法
 type RSA struct {
-	locker   sync.Mutex
 	signHash *HASH
 	pubKey   *rsa.PublicKey
 	priKey   *rsa.PrivateKey
@@ -163,8 +161,6 @@ func (w *RSA) Encode(b []byte) (CValue, error) {
 	if w.pubKey == nil {
 		return EmptyValue, fmt.Errorf("no public key found")
 	}
-	w.locker.Lock()
-	defer w.locker.Unlock()
 	max := w.pubKey.Size() / 2
 	buf := bytes.Buffer{}
 	var err error
@@ -193,8 +189,6 @@ func (w *RSA) Decode(b []byte) (string, error) {
 	if w.priKey == nil {
 		return "", fmt.Errorf("no private key found")
 	}
-	w.locker.Lock()
-	defer w.locker.Unlock()
 	max := w.priKey.Size()
 	buf := bytes.Buffer{}
 	var err error
@@ -232,8 +226,6 @@ func (w *RSA) Sign(b []byte) (CValue, error) {
 	if w.priKey == nil {
 		return EmptyValue, fmt.Errorf("no private key found")
 	}
-	w.locker.Lock()
-	defer w.locker.Unlock()
 	signature, err := rsa.SignPSS(rand.Reader, w.priKey, crypto.SHA256, w.signHash.Hash(b).Bytes(), nil)
 	if err != nil {
 		return EmptyValue, err
@@ -246,8 +238,6 @@ func (w *RSA) VerifySign(signature, data []byte) (bool, error) {
 	if w.pubKey == nil {
 		return false, fmt.Errorf("no public key found")
 	}
-	w.locker.Lock()
-	defer w.locker.Unlock()
 	err := rsa.VerifyPSS(w.pubKey, crypto.SHA256, w.signHash.Hash(data).Bytes(), signature, nil)
 	return err == nil, nil
 }
@@ -433,8 +423,7 @@ func (w *RSA) CreateCert(opt *CertOpt) error {
 //	签名算法采用sha256
 func NewRSA() *RSA {
 	w := &RSA{
-		locker:   sync.Mutex{},
-		signHash: NewHash(HashSHA256),
+		signHash: NewHash(HashSHA256, nil),
 	}
 	return w
 }

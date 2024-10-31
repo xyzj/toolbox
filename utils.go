@@ -848,3 +848,11 @@ func HTTPBasicAuth(namemap map[string]string, next http.HandlerFunc) http.Handle
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 	})
 }
+
+func String(b []byte) string {
+	return json.String(b)
+}
+
+func Bytes(s string) []byte {
+	return json.Bytes(s)
+}

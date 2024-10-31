@@ -13,7 +13,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/tjfoc/gmsm/sm2"
@@ -23,8 +22,20 @@ import (
 	"github.com/xyzj/toolbox/pathtool"
 )
 
+type SM4Type byte
+
+const (
+	// SM4CBC SM4 CBC算法
+	SM4CBC SM4Type = iota
+	// SM4CFB SM4 CFB算法
+	SM4CFB
+	// SM4OFB SM4 CBC算法
+	SM4OFB
+	// SM4ECB SM4 CFB算法
+	SM4ECB
+)
+
 type SM2 struct {
-	locker   sync.Mutex
 	pubKey   *sm2.PublicKey
 	priKey   *sm2.PrivateKey
 	pubBytes CValue
@@ -147,8 +158,6 @@ func (w *SM2) EncodeAsn1(b []byte) (CValue, error) {
 	if w.pubKey == nil {
 		return EmptyValue, fmt.Errorf("no public key found")
 	}
-	w.locker.Lock()
-	defer w.locker.Unlock()
 	res, err := w.pubKey.EncryptAsn1(b, rand.Reader)
 	if err != nil {
 		return EmptyValue, err
@@ -161,8 +170,6 @@ func (w *SM2) Encode(b []byte) (CValue, error) {
 	if w.pubKey == nil {
 		return EmptyValue, fmt.Errorf("no public key found")
 	}
-	w.locker.Lock()
-	defer w.locker.Unlock()
 	res, err := sm2.Encrypt(w.pubKey, b, rand.Reader, sm2.C1C3C2)
 	// res, err := w.pubKey.EncryptAsn1(b, rand.Reader)
 	if err != nil {
@@ -176,8 +183,6 @@ func (w *SM2) Decode(b []byte) (string, error) {
 	if w.priKey == nil {
 		return "", fmt.Errorf("no private key found")
 	}
-	w.locker.Lock()
-	defer w.locker.Unlock()
 	c, err := w.priKey.Decrypt(nil, b, nil)
 	if err != nil {
 		c, err = w.priKey.DecryptAsn1(b)
@@ -202,8 +207,6 @@ func (w *SM2) Sign(b []byte) (CValue, error) {
 	if w.priKey == nil {
 		return EmptyValue, fmt.Errorf("no private key found")
 	}
-	w.locker.Lock()
-	defer w.locker.Unlock()
 	signature, err := w.priKey.Sign(rand.Reader, b, nil)
 	if err != nil {
 		return EmptyValue, err
@@ -216,8 +219,6 @@ func (w *SM2) VerifySign(signature, data []byte) (bool, error) {
 	if w.pubKey == nil {
 		return false, fmt.Errorf("no public key found")
 	}
-	w.locker.Lock()
-	defer w.locker.Unlock()
 	ok := w.pubKey.Verify(data, signature)
 	return ok, nil
 }
@@ -403,14 +404,11 @@ func (w *SM2) CreateCert(opt *CertOpt) error {
 
 // NewSM2 创建一个新的sm2算法器
 func NewSM2() *SM2 {
-	return &SM2{
-		locker: sync.Mutex{},
-	}
+	return &SM2{}
 }
 
 // sm4
 type SM4 struct {
-	locker   sync.Mutex
 	workType SM4Type
 	key      []byte
 	iv       []byte
@@ -502,7 +500,6 @@ func (w *SM4) EncryptTo(s string) CValue {
 // NewSM4 创建一个新的sm4算法器
 func NewSM4(t SM4Type) *SM4 {
 	return &SM4{
-		locker:   sync.Mutex{},
 		workType: t,
 	}
 }

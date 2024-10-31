@@ -49,68 +49,12 @@ func (v CValue) URLBase64String() string {
 	return base64.URLEncoding.EncodeToString(v)
 }
 
-type (
-	HashType byte
-	AESType  byte
-	RSAType  byte
-	SM4Type  byte
-)
-
-const (
-	// HashMD5 md5算法
-	HashMD5 HashType = iota
-	// HashSHA256 sha256算法
-	HashSHA256
-	// HashSHA512 sha512算法
-	HashSHA512
-	// HashHMACSHA1 hmacsha1摘要算法
-	HashHMACSHA1
-	// HashHMACSHA256 hmacsha256摘要算法
-	HashHMACSHA256
-	// HashSHA1 sha1算法
-	HashSHA1
-	// HashSM3 国密sm3
-	HashSM3
-)
-
-const (
-	// AES128CBC aes128cbc算法
-	AES128CBC AESType = iota
-	// AES192CBC aes192cbc算法
-	AES192CBC
-	// AES256CBC aes256cbc算法
-	AES256CBC
-	// AES128CFB aes128cfb算法
-	AES128CFB
-	// AES192CFB aes192cfb算法
-	AES192CFB
-	// AES256CFB aes256cfb算法
-	AES256CFB
-	// AES128ECB aes128ecb算法
-	AES128ECB
-	// AES192ECB aes192ecb算法
-	AES192ECB
-	// AES256ECB aes256ecb算法
-	AES256ECB
-)
-
-const (
-	// SM4CBC SM4 CBC算法
-	SM4CBC SM4Type = iota
-	// SM4CFB SM4 CFB算法
-	SM4CFB
-	// SM4OFB SM4 CBC算法
-	SM4OFB
-	// SM4ECB SM4 CFB算法
-	SM4ECB
-)
-
 var (
-	md5hash    = NewHash(HashMD5)
-	sha1hash   = NewHash(HashSHA1)
-	sha256hash = NewHash(HashSHA256)
-	sha512hash = NewHash(HashSHA512)
-	sm3hash    = NewHash(HashSM3)
+	md5hash    = NewHash(HashMD5, nil)
+	sha1hash   = NewHash(HashSHA1, nil)
+	sha256hash = NewHash(HashSHA256, nil)
+	sha512hash = NewHash(HashSHA512, nil)
+	sm3hash    = NewHash(HashSM3, nil)
 )
 
 type CertOpt struct {

@@ -16,7 +16,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto/ecies"
@@ -35,7 +34,6 @@ var (
 
 // ECC ecc算法
 type ECC struct {
-	locker   sync.Mutex
 	signHash *HASH
 	pubKey   *ecdsa.PublicKey
 	priKey   *ecdsa.PrivateKey
@@ -181,8 +179,6 @@ func (w *ECC) Encode(b []byte) (CValue, error) {
 	if w.pubEcies == nil {
 		return EmptyValue, fmt.Errorf("no public key found")
 	}
-	w.locker.Lock()
-	defer w.locker.Unlock()
 	res, err := ecies.Encrypt(rand.Reader, w.pubEcies, b, nil, nil)
 	if err != nil {
 		return EmptyValue, err
@@ -195,8 +191,6 @@ func (w *ECC) Decode(b []byte) (string, error) {
 	if w.priEcies == nil {
 		return "", fmt.Errorf("no private key found")
 	}
-	w.locker.Lock()
-	defer w.locker.Unlock()
 	c, err := w.priEcies.Decrypt(b, nil, nil)
 	if err != nil {
 		return "", err
@@ -218,8 +212,6 @@ func (w *ECC) Sign(b []byte) (CValue, error) {
 	if w.priKey == nil {
 		return EmptyValue, fmt.Errorf("no private key found")
 	}
-	w.locker.Lock()
-	defer w.locker.Unlock()
 	signature, err := ecdsa.SignASN1(rand.Reader, w.priKey, w.signHash.Hash(b).Bytes())
 	if err != nil {
 		return EmptyValue, err
@@ -232,8 +224,6 @@ func (w *ECC) VerifySign(signature, data []byte) (bool, error) {
 	if w.pubKey == nil {
 		return false, fmt.Errorf("no public key found")
 	}
-	w.locker.Lock()
-	defer w.locker.Unlock()
 	ok := ecdsa.VerifyASN1(w.pubKey, w.signHash.Hash(data).Bytes(), signature)
 	return ok, nil
 }
@@ -420,8 +410,7 @@ func (w *ECC) CreateCert(opt *CertOpt) error {
 //	支持 openssl ecparam -name prime256v1/secp384r1 格式的密钥
 func NewECC() *ECC {
 	w := &ECC{
-		locker:   sync.Mutex{},
-		signHash: NewHash(HashSHA256),
+		signHash: NewHash(HashSHA256, nil),
 	}
 	return w
 }

@@ -5,14 +5,35 @@ import (
 	"crypto/cipher"
 	"encoding/base64"
 	"fmt"
-	"sync"
 
 	"github.com/xyzj/toolbox/json"
 )
 
+type AESType byte
+
+const (
+	// AES128CBC aes128cbc算法
+	AES128CBC AESType = iota
+	// AES192CBC aes192cbc算法
+	AES192CBC
+	// AES256CBC aes256cbc算法
+	AES256CBC
+	// AES128CFB aes128cfb算法
+	AES128CFB
+	// AES192CFB aes192cfb算法
+	AES192CFB
+	// AES256CFB aes256cfb算法
+	AES256CFB
+	// AES128ECB aes128ecb算法
+	AES128ECB
+	// AES192ECB aes192ecb算法
+	AES192ECB
+	// AES256ECB aes256ecb算法
+	AES256ECB
+)
+
 // AES aes算法
 type AES struct {
-	locker    sync.Mutex
 	padding   func(ciphertext []byte, blockSize int) []byte
 	unpadding func(encrypt []byte) []byte
 	block     cipher.Block
@@ -73,8 +94,6 @@ func (w *AES) Encode(b []byte) (CValue, error) {
 	if w.block == nil {
 		return EmptyValue, fmt.Errorf("key or iv are not set")
 	}
-	w.locker.Lock()
-	defer w.locker.Unlock()
 	content := w.padding(b, aes.BlockSize)
 	var crypted []byte
 	idx := 0
@@ -104,8 +123,6 @@ func (w *AES) Decode(b []byte) (string, error) {
 	if w.block == nil {
 		return "", fmt.Errorf("key or iv are not set")
 	}
-	w.locker.Lock()
-	defer w.locker.Unlock()
 	if w.appendiv {
 		w.iv = b[:aes.BlockSize]
 		b = b[aes.BlockSize:]
@@ -164,7 +181,6 @@ func (w *AES) EncryptTo(s string) CValue {
 // NewAES 创建一个新的aes加密解密器
 func NewAES(t AESType) *AES {
 	w := &AES{
-		locker:   sync.Mutex{},
 		workType: t,
 	}
 	switch t {
