@@ -849,10 +849,16 @@ func HTTPBasicAuth(namemap map[string]string, next http.HandlerFunc) http.Handle
 	})
 }
 
+// String use unsafe package conver []byte to string
+//
+// Deprecated: use json.String
 func String(b []byte) string {
 	return json.String(b)
 }
 
+// Bytes use unsafe package conver string to []byte
+//
+// Deprecated: use json.String
 func Bytes(s string) []byte {
 	return json.Bytes(s)
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/go-echarts/go-echarts/v2/charts"
 	"github.com/go-echarts/go-echarts/v2/components"
 	"github.com/go-echarts/go-echarts/v2/opts"
+	"github.com/go-echarts/go-echarts/v2/types"
 	"github.com/mohae/deepcopy"
 	"github.com/shirou/gopsutil/net"
 	"github.com/shirou/gopsutil/process"
@@ -26,7 +27,7 @@ import (
 	"github.com/xyzj/toolbox/loopfunc"
 )
 
-// go-echats should be v2.3.3
+// go-echats should be v2.4.3
 
 //go:embed echarts.min.js
 var echarts []byte
@@ -212,8 +213,8 @@ func (r *Recorder) BuildLines(width string, js []*procStatus) []byte {
 	con := make([]opts.LineData, 0, l)
 	for _, v := range js {
 		x = append(x, toolbox.Stamp2Time(v.Dt, "01-02 15:04:05"))
-		cpu = append(cpu, opts.LineData{Name: fmt.Sprintf("%.2f%%", v.Cpup), Value: v.Cpup, Symbol: "circle"})
-		mem = append(mem, opts.LineData{Name: fmt.Sprintf("%.2f%%", v.Memp), Value: v.Memp, Symbol: "circle"})
+		cpu = append(cpu, opts.LineData{Name: fmt.Sprintf("%.2f%%", v.Cpup), Value: toolbox.FormatFloat64(float64(v.Cpup), 2), Symbol: "circle"})
+		mem = append(mem, opts.LineData{Name: fmt.Sprintf("%.2f%%", v.Memp), Value: toolbox.FormatFloat64(float64(v.Memp), 2), Symbol: "circle"})
 		rss = append(rss, opts.LineData{Name: toolbox.FormatFileSize(v.Memrss), Value: v.Memrss / 1024 / 1024, Symbol: "circle"})
 		vms = append(vms, opts.LineData{Name: toolbox.FormatFileSize(v.Memvms), Value: v.Memvms / 1024 / 1024, Symbol: "circle"})
 		ofd = append(ofd, opts.LineData{Name: fmt.Sprintf("%d", v.Ofd), Value: v.Ofd, Symbol: "circle"})
@@ -230,6 +231,12 @@ func (r *Recorder) BuildLines(width string, js []*procStatus) []byte {
 		YFormatter:  "{value} %",
 		Width:       width,
 	})...)
+	line1.YAxisList = SetupYAxisOpts(YAxisOpt{
+		Name:        "cpu & mem",
+		SplitNumber: 7,
+		Formatter:   "{value} %",
+		Align:       "left",
+	})
 	line1.SetXAxis(x)
 	line1.SetSeriesOptions(SetupLineSOpts()...)
 	line1.AddSeries("cpu", cpu)
@@ -243,44 +250,25 @@ func (r *Recorder) BuildLines(width string, js []*procStatus) []byte {
 		YFormatter:  "{value} MB",
 		Width:       width,
 	})...)
-	lineMem.YAxisList = []opts.YAxis{
-		{
-			Name:        "rss",
-			Show:        true,
-			SplitNumber: 7,
-			SplitLine: &opts.SplitLine{
-				Show: false,
-			},
-			SplitArea: &opts.SplitArea{
-				Show: true,
-			},
-			AxisLabel: &opts.AxisLabel{
-				Show:      true,
-				Formatter: "{value} MB",
-				Align:     "left",
-			},
-		},
-		{
-			Name:        "vms",
-			Show:        true,
-			SplitNumber: 7,
-			SplitLine: &opts.SplitLine{
-				Show: false,
-			},
-			SplitArea: &opts.SplitArea{
-				Show: false,
-			},
-			AxisLabel: &opts.AxisLabel{
-				Show:      true,
-				Formatter: "{value} MB",
-				Align:     "right",
-			},
-		},
-	}
+	lineMem.YAxisList = SetupYAxisOpts(YAxisOpt{
+		Name:        "rss",
+		SplitNumber: 7,
+		SplitLine:   false,
+		SplitArea:   true,
+		Formatter:   "{value} MB",
+		Align:       "left",
+	}, YAxisOpt{
+		Name:        "vms",
+		SplitNumber: 7,
+		SplitLine:   false,
+		SplitArea:   false,
+		Formatter:   "{value} MB",
+		Align:       "right",
+	})
 	lineMem.SetXAxis(x)
 	lineMem.AddSeries("rss", rss, charts.WithLineChartOpts(
 		opts.LineChart{
-			Smooth:     true,
+			Smooth:     opts.Bool(true),
 			YAxisIndex: 0,
 		}),
 		charts.WithLineStyleOpts(opts.LineStyle{
@@ -290,7 +278,7 @@ func (r *Recorder) BuildLines(width string, js []*procStatus) []byte {
 		}))
 	lineMem.AddSeries("vms", vms, charts.WithLineChartOpts(
 		opts.LineChart{
-			Smooth:     false,
+			Smooth:     opts.Bool(false),
 			YAxisIndex: 1,
 		}))
 
@@ -301,6 +289,12 @@ func (r *Recorder) BuildLines(width string, js []*procStatus) []byte {
 		TTFormatter: "{a0}: <b>{b0}</b><br>{a1}: <b>{b1}</b>",
 		Width:       width,
 	})...)
+	lineOfd.YAxisList = SetupYAxisOpts(YAxisOpt{
+		Name:        "ofd & conn",
+		SplitNumber: 7,
+		Formatter:   "{value}",
+		Align:       "left",
+	})
 	lineOfd.SetXAxis(x)
 	lineOfd.SetSeriesOptions(SetupLineSOpts(charts.WithAreaStyleOpts(opts.AreaStyle{
 		Opacity: 0.2,
@@ -316,15 +310,36 @@ func (r *Recorder) BuildLines(width string, js []*procStatus) []byte {
 		YFormatter:  "{value} MB",
 		Width:       width,
 	})...)
+	lineIO.YAxisList = SetupYAxisOpts(YAxisOpt{
+		Name:        "read",
+		SplitNumber: 7,
+		Formatter:   "{value} MB",
+		Align:       "left",
+	}, YAxisOpt{
+		Name:        "write",
+		SplitNumber: 7,
+		SplitArea:   true,
+		Formatter:   "{value} MB",
+		Align:       "right",
+	})
 	lineIO.SetXAxis(x)
 	lineIO.SetSeriesOptions(SetupLineSOpts(charts.WithAreaStyleOpts(opts.AreaStyle{
 		Opacity: 0.3,
 	}))...)
-	lineIO.AddSeries("read", ior)
-	lineIO.AddSeries("write", iow)
+	lineIO.AddSeries("read", ior, charts.WithLineChartOpts(
+		opts.LineChart{
+			Smooth:     opts.Bool(true),
+			YAxisIndex: 0,
+		}),
+	)
+	lineIO.AddSeries("write", iow, charts.WithLineChartOpts(
+		opts.LineChart{
+			Smooth:     opts.Bool(true),
+			YAxisIndex: 1,
+		}))
 	a := components.NewPage()
 	a.PageTitle = "Process Records" + nametail
-	a.AddCharts(line1, lineOfd, lineMem, lineIO)
+	a.AddCharts(line1, lineOfd, lineMem, lineIO) //, line1,lineOfd, lineMem, lineIO)
 	b := &bytes.Buffer{}
 	a.Render(b)
 	return b.Bytes()
@@ -338,6 +353,8 @@ func (r *Recorder) GinHandler(c *gin.Context) {
 		c.Set("status", 1)
 		c.JSON(200, c.Keys)
 	case "GET":
+		x := LocalEchartsJS(r.BuildLines(c.Param("width"), js))
+		os.WriteFile("a.html", x, 0o664)
 		c.Writer.Write(LocalEchartsJS(r.BuildLines(c.Param("width"), js)))
 	}
 }
@@ -385,61 +402,61 @@ func SetupLineGOpts(lopt *LineOpt) []charts.GlobalOpts {
 		start = (lopt.Total - lopt.PageCount) / lopt.Total * 100
 	}
 	return []charts.GlobalOpts{
-		charts.WithAnimation(),
+		charts.WithDataZoomOpts(opts.DataZoom{
+			Start: start,
+		}),
+		charts.WithAnimation(true),
 		charts.WithTitleOpts(opts.Title{
 			Title: lopt.Name,
 			Left:  "10%",
 		}),
 		charts.WithTooltipOpts(opts.Tooltip{
-			Trigger:   "axis",
-			Show:      true,
-			Formatter: lopt.TTFormatter,
+			Trigger: "axis",
+			Show:    opts.Bool(true),
+			// Formatter: opts.FuncOpts(lopt.TTFormatter),
 			AxisPointer: &opts.AxisPointer{
-				Show: true,
+				Show: opts.Bool(true),
 				Type: "line",
 				Label: &opts.Label{
-					Show: true,
+					Show: opts.Bool(true),
 				},
 			},
 		}),
 		charts.WithToolboxOpts(opts.Toolbox{
-			Show: true,
+			Show: opts.Bool(true),
 			Feature: &opts.ToolBoxFeature{
 				SaveAsImage: &opts.ToolBoxFeatureSaveAsImage{
-					Show: true,
+					Show: opts.Bool(true),
 				},
 			},
 		}),
 		charts.WithInitializationOpts(opts.Initialization{
 			PageTitle: lopt.PageTitle,
-			// Theme:     types.ChartThemeRiver,
-			Width:  lopt.Width,
-			Height: lopt.Heigh,
+			Theme:     types.ChartThemeRiver,
+			Width:     lopt.Width,
+			Height:    lopt.Heigh,
 		}),
 		charts.WithXAxisOpts(opts.XAxis{
 			AxisLabel: &opts.AxisLabel{
-				Show:         true,
+				Show:         opts.Bool(true),
 				Rotate:       30,
-				ShowMinLabel: true,
-				ShowMaxLabel: true,
+				ShowMinLabel: opts.Bool(true),
+				ShowMaxLabel: opts.Bool(true),
 			},
 		}),
 		charts.WithYAxisOpts(opts.YAxis{
 			SplitLine: &opts.SplitLine{
-				Show: false,
+				Show: opts.Bool(false),
 			},
 			SplitArea: &opts.SplitArea{
-				Show: true,
+				Show: opts.Bool(true),
 			},
 			AxisLabel: &opts.AxisLabel{
-				Show:         true,
-				ShowMinLabel: true,
-				ShowMaxLabel: true,
-				Formatter:    lopt.YFormatter,
+				Show:         opts.Bool(true),
+				ShowMinLabel: opts.Bool(true),
+				ShowMaxLabel: opts.Bool(true),
+				Formatter:    opts.FuncOpts(lopt.YFormatter),
 			},
-		}),
-		charts.WithDataZoomOpts(opts.DataZoom{
-			Start: start,
 		}),
 	}
 }
@@ -447,7 +464,7 @@ func SetupLineGOpts(lopt *LineOpt) []charts.GlobalOpts {
 func SetupLineSOpts(lopt ...charts.SeriesOpts) []charts.SeriesOpts {
 	serOpt := []charts.SeriesOpts{
 		charts.WithLineChartOpts(opts.LineChart{
-			Smooth: true,
+			Smooth: opts.Bool(true),
 		}),
 		charts.WithLineStyleOpts(opts.LineStyle{
 			Width: 2,
@@ -460,11 +477,44 @@ func SetupLineSOpts(lopt ...charts.SeriesOpts) []charts.SeriesOpts {
 func SetupBarSOpts(lopt ...charts.SeriesOpts) []charts.SeriesOpts {
 	serOpt := []charts.SeriesOpts{
 		charts.WithBarChartOpts(opts.BarChart{
-			RoundCap: true,
+			RoundCap: opts.Bool(true),
 		}),
 	}
 	serOpt = append(serOpt, lopt...)
 	return serOpt
+}
+
+type YAxisOpt struct {
+	Name        string
+	Formatter   string
+	Align       string
+	SplitNumber int
+	SplitLine   bool
+	SplitArea   bool
+}
+
+func SetupYAxisOpts(lopt ...YAxisOpt) []opts.YAxis {
+	var yAxis []opts.YAxis
+	for _, o := range lopt {
+		yAxis = append(yAxis, opts.YAxis{
+			Name:        o.Name,
+			SplitNumber: o.SplitNumber,
+			Show:        opts.Bool(true),
+			SplitLine: &opts.SplitLine{
+				Show: opts.Bool(o.SplitLine),
+			},
+			SplitArea: &opts.SplitArea{
+				Show: opts.Bool(o.SplitArea),
+			},
+			AxisLabel: &opts.AxisLabel{
+				Show:      opts.Bool(true),
+				Interval:  "auto",
+				Formatter: types.FuncStr(o.Formatter),
+				Align:     o.Align,
+			},
+		})
+	}
+	return yAxis
 }
 
 func EchartsJS() []byte {
@@ -475,6 +525,7 @@ func LocalEchartsJS(htmlpage []byte) []byte {
 	if len(htmlpage) == 0 {
 		return EchartsJS()
 	}
+	// return htmlpage
 	s := bytes.ReplaceAll(htmlpage, json.Bytes(`<script src="https://go-echarts.github.io/go-echarts-assets/assets/echarts.min.js"></script>`), EchartsJS())
 	s = bytes.ReplaceAll(s, json.Bytes(`<script src="https://go-echarts.github.io/go-echarts-assets/assets/themes/themeRiver.js"></script>`), []byte{})
 	return s
