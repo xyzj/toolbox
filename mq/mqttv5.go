@@ -198,6 +198,8 @@ func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte))
 		ServerUrls:                    []*url.URL{u},
 		KeepAlive:                     55,
 		CleanStartOnInitialConnection: true,
+		ConnectUsername:               opt.Username,
+		ConnectPassword:               []byte(opt.Passwd),
 		TlsCfg:                        opt.TLSConf,
 		ConnectRetryDelay:             time.Second * time.Duration(rand.Int31n(30)+30),
 		ConnectTimeout:                time.Second * 5,
@@ -246,8 +248,6 @@ func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte))
 			st = false
 			opt.Logg.Error(opt.LogHeader + " connect error: " + err.Error())
 		},
-		ConnectUsername: opt.Username,
-		ConnectPassword: []byte(opt.Passwd),
 		ClientConfig: paho.ClientConfig{
 			ClientID: opt.ClientID, // toolbox.GetRandomString(19, true),
 			OnServerDisconnect: func(d *paho.Disconnect) {

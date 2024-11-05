@@ -64,7 +64,8 @@ func (o *OptLog) ensureDefaults() {
 
 func NewConsoleWriter() io.Writer {
 	return &Writer{
-		out: os.Stdout,
+		timeFormat: LongTimeFormat,
+		out:        os.Stdout,
 	}
 }
 

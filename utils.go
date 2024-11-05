@@ -54,8 +54,6 @@ var (
 	DefaultCacheDir = filepath.Join(pathtool.GetExecDir(), "..", "cache")
 	// DefaultConfDir 默认配置文件夹
 	DefaultConfDir = filepath.Join(pathtool.GetExecDir(), "..", "conf")
-
-	cacheCompress = crypto.NewCompressor(crypto.CompressZstd)
 )
 
 // Base64URLDecode url解码
