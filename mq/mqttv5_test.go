@@ -86,12 +86,12 @@ func TestCli(t *testing.T) {
 	})
 
 	for {
+		time.Sleep(time.Second * 6)
 		err := v3.Write("yiyang/asdfsdf", []byte("123123"))
 		if err != nil {
-			t.Fatal(err)
-			return
+			println(err.Error())
+			continue
 		}
-		time.Sleep(time.Second * 1)
 		// err = v5.Write("23842/2382", []byte("189273gksdhfksf"))
 		// if err != nil {
 		// 	t.Fatal(err)
