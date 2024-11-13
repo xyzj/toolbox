@@ -23,7 +23,7 @@ const (
 	maxFileSize    = 1024 * 1024 // 100mb
 	// ShortTimeFormat 日志事件戳格式
 	ShortTimeFormat = "15:04:05.000 "
-	LongTimeFormat  = "2006-01-02 15:04:05.000 "
+	LongTimeFormat  = "Jan 02 15:04:05.000 " // 2006-01-02 15:04:05.000 "
 )
 
 var (

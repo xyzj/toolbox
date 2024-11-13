@@ -224,11 +224,10 @@ func NewCompressor(t CompressType) *Compressor {
 			}
 		}
 		decnew = func() any {
-			dec, _ := gzip.NewReader(nil)
 			return gzipDec{
 				buf:   &bytes.Buffer{},
 				in:    bytes.NewReader([]byte{}),
-				coder: dec,
+				coder: new(gzip.Reader),
 			}
 		}
 	case CompressSnappy:
