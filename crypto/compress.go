@@ -224,7 +224,7 @@ func NewCompressor(t CompressType) *Compressor {
 			}
 		}
 		decnew = func() any {
-			return gzipDec{
+			return &gzipDec{
 				buf:   &bytes.Buffer{},
 				in:    bytes.NewReader([]byte{}),
 				coder: new(gzip.Reader),
