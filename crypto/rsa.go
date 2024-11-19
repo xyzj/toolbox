@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/xyzj/toolbox/json"
@@ -31,11 +32,14 @@ var (
 
 // RSA rsa算法
 type RSA struct {
-	signHash *HASH
-	pubKey   *rsa.PublicKey
-	priKey   *rsa.PrivateKey
-	pubBytes CValue
-	priBytes CValue
+	signHash   *HASH
+	pubKey     *rsa.PublicKey
+	priKey     *rsa.PrivateKey
+	bufpool    *sync.Pool
+	encodeSize int
+	decodeSize int
+	pubBytes   CValue
+	priBytes   CValue
 }
 
 // Keys 返回公钥和私钥
@@ -66,6 +70,8 @@ func (w *RSA) GenerateKey(bits RSABits) (CValue, CValue, error) {
 	w.pubBytes = txt
 	w.pubKey = &p.PublicKey
 	w.priKey = p
+	w.encodeSize = w.pubKey.Size() / 2
+	w.decodeSize = w.priKey.Size()
 	return w.pubBytes, w.priBytes, nil
 }
 
@@ -118,6 +124,7 @@ func (w *RSA) SetPublicKey(key string) error {
 	}
 	w.pubBytes = bb
 	w.pubKey = pubKey.(*rsa.PublicKey)
+	w.encodeSize = w.pubKey.Size() / 2
 	return nil
 }
 
@@ -143,6 +150,7 @@ func (w *RSA) SetPrivateKey(key string) error {
 	}
 	w.priBytes = bb
 	w.priKey = priKey.(*rsa.PrivateKey)
+	w.decodeSize = w.priKey.Size()
 
 	if len(w.pubBytes) == 0 {
 		// 没有载入国pubkey，生成新的pubkey
@@ -152,6 +160,7 @@ func (w *RSA) SetPrivateKey(key string) error {
 		}
 		w.pubBytes = txt
 		w.pubKey = &w.priKey.PublicKey
+		w.encodeSize = w.pubKey.Size() / 2
 	}
 	return nil
 }
@@ -161,12 +170,17 @@ func (w *RSA) Encode(b []byte) (CValue, error) {
 	if w.pubKey == nil {
 		return EmptyValue, fmt.Errorf("no public key found")
 	}
-	max := w.pubKey.Size() / 2
-	buf := bytes.Buffer{}
+	// max := w.pubKey.Size() / 2
+	// buf := &bytes.Buffer{}
+	buf := w.bufpool.Get().(*bytes.Buffer)
+	defer func() {
+		buf.Reset()
+		w.bufpool.Put(buf)
+	}()
 	var err error
 	var res []byte
 	for {
-		if len(b) <= max {
+		if len(b) <= w.encodeSize {
 			res, err = rsa.EncryptPKCS1v15(rand.Reader, w.pubKey, b)
 			if err != nil {
 				return EmptyValue, err
@@ -174,12 +188,12 @@ func (w *RSA) Encode(b []byte) (CValue, error) {
 			buf.Write(res)
 			break
 		}
-		res, err = rsa.EncryptPKCS1v15(rand.Reader, w.pubKey, b[:max])
+		res, err = rsa.EncryptPKCS1v15(rand.Reader, w.pubKey, b[:w.encodeSize])
 		if err != nil {
 			return EmptyValue, err
 		}
 		buf.Write(res)
-		b = b[max:]
+		b = b[w.encodeSize:]
 	}
 	return CValue(buf.Bytes()), err
 }
@@ -189,12 +203,17 @@ func (w *RSA) Decode(b []byte) (string, error) {
 	if w.priKey == nil {
 		return "", fmt.Errorf("no private key found")
 	}
-	max := w.priKey.Size()
-	buf := bytes.Buffer{}
+	// max := w.priKey.Size()
+	// buf := &bytes.Buffer{}
+	buf := w.bufpool.Get().(*bytes.Buffer)
+	defer func() {
+		buf.Reset()
+		w.bufpool.Put(buf)
+	}()
 	var err error
 	var res []byte
 	for {
-		if len(b) <= max {
+		if len(b) <= w.decodeSize {
 			res, err = rsa.DecryptPKCS1v15(rand.Reader, w.priKey, b)
 			if err != nil {
 				return "", err
@@ -202,12 +221,12 @@ func (w *RSA) Decode(b []byte) (string, error) {
 			buf.Write(res)
 			break
 		}
-		res, err = rsa.DecryptPKCS1v15(rand.Reader, w.priKey, b[:max])
+		res, err = rsa.DecryptPKCS1v15(rand.Reader, w.priKey, b[:w.decodeSize])
 		if err != nil {
 			return "", err
 		}
 		buf.Write(res)
-		b = b[max:]
+		b = b[w.decodeSize:]
 	}
 	return buf.String(), err
 }
@@ -424,6 +443,11 @@ func (w *RSA) CreateCert(opt *CertOpt) error {
 func NewRSA() *RSA {
 	w := &RSA{
 		signHash: NewHash(HashSHA256, nil),
+		bufpool: &sync.Pool{
+			New: func() any {
+				return &bytes.Buffer{}
+			},
+		},
 	}
 	return w
 }

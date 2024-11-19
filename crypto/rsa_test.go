@@ -57,7 +57,7 @@ func TestRSA(t *testing.T) {
 	// RSAGenKey(4096)
 	c := NewRSA()
 	c.GenerateKey(RSA2048)
-	sss := "1267312shfskdfadfaf" // toolbox.GetRandomString(30002, true) // "1267312shfskdfadfaf"
+	// sss := "1267312shfskdfadfaf" // toolbox.GetRandomString(30002, true) // "1267312shfskdfadfaf"
 	bb := []byte(sss)
 	w := sync.WaitGroup{}
 	w.Add(20000)
@@ -77,7 +77,7 @@ func TestRSA(t *testing.T) {
 			}
 		}()
 	}
-	w.Wait()
+	// w.Wait()
 	println("done")
 }
 
