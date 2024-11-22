@@ -50,12 +50,13 @@ func (e *zstdDec) Decode(src []byte) ([]byte, error) {
 	e.buf.Reset()
 	e.in.Reset(src)
 	e.coder.Reset(e.in)
-	_, err := io.Copy(e.buf, e.coder)
-	if err != nil {
-		e.coder.Close()
-		return nil, err
-	}
-	e.coder.Close()
+	// _, err := io.Copy(e.buf, e.coder)
+	// if err != nil {
+	// 	// e.coder.Close()
+	// 	return nil, err
+	// }
+	// e.coder.Close()
+	e.coder.WriteTo(e.buf)
 	return e.buf.Bytes(), nil
 }
 
@@ -196,7 +197,7 @@ func (z *Compressor) Encode(src []byte) ([]byte, error) {
 	}
 }
 
-func (z *Compressor) Deocde(src []byte) ([]byte, error) {
+func (z *Compressor) Decode(src []byte) ([]byte, error) {
 	tool := z.decpool.Get()
 	defer z.decpool.Put(tool)
 	switch z.t {
@@ -271,7 +272,7 @@ func NewCompressor(t CompressType) *Compressor {
 			}
 		}
 		decnew = func() any {
-			dec, _ := zstd.NewReader(nil)
+			dec, _ := zstd.NewReader(nil, zstd.WithDecoderConcurrency(0))
 			return &zstdDec{
 				buf:   &bytes.Buffer{},
 				in:    bytes.NewReader([]byte{}),

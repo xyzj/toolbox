@@ -347,7 +347,7 @@ func DecodeStringOld(s string) string {
 			}
 		}
 		zlibCompress := crypto.NewCompressor(crypto.CompressZlib)
-		b, err := zlibCompress.Deocde(ns.Bytes())
+		b, err := zlibCompress.Decode(ns.Bytes())
 		if err != nil {
 			return ""
 		}
