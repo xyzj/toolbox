@@ -24,6 +24,12 @@ var (
 	messageExpiry uint32 = 600
 )
 
+var (
+	ErrorResendCache  = fmt.Errorf("not connect to the server, cache sent")
+	ErrorOptions      = fmt.Errorf("mqtt opt error")
+	ErrorNotConnected = fmt.Errorf("not connect to the server")
+)
+
 var EmptyMQTTClientV5 = &MqttClientV5{
 	empty: true,
 	st:    &atomic.Bool{},
@@ -128,9 +134,10 @@ func (m *MqttClientV5) WriteWithQos(topic string, body []byte, qos byte) error {
 						qos:   qos,
 					},
 					time.Hour)
+				return ErrorResendCache
 			}
 		}
-		return fmt.Errorf("not connect to the server")
+		return ErrorNotConnected
 	}
 	ctx, cancel := context.WithTimeout(context.TODO(), time.Second*3)
 	defer cancel()
@@ -148,7 +155,7 @@ func (m *MqttClientV5) WriteWithQos(topic string, body []byte, qos byte) error {
 		},
 	})
 	if err != nil {
-		m.cnf.Logg.Debug(m.cnf.LogHeader + " Err:" + topic + "|" + err.Error())
+		m.cnf.Logg.Debug(m.cnf.LogHeader + "S Err:" + topic + "|" + err.Error())
 		return err
 	}
 	m.cnf.Logg.Debug(m.cnf.LogHeader + " S:" + topic)
@@ -158,7 +165,7 @@ func (m *MqttClientV5) WriteWithQos(topic string, body []byte, qos byte) error {
 // NewMQTTClientV5 创建一个5.0的mqtt client
 func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte)) (*MqttClientV5, error) {
 	if opt == nil {
-		return EmptyMQTTClientV5, fmt.Errorf("mqtt opt error")
+		return EmptyMQTTClientV5, ErrorOptions
 	}
 	if opt.SendTimeo == 0 {
 		opt.SendTimeo = time.Second * 5
@@ -237,7 +244,9 @@ func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte))
 						},
 					})
 					if err != nil {
-						opt.Logg.Error(opt.LogHeader + " ReSend `" + value.topic + "` error:" + err.Error())
+						opt.Logg.Error(opt.LogHeader + " ReS Err:" + value.topic + "|" + err.Error())
+					} else {
+						opt.Logg.Info(fmt.Sprintf("%s ReS:%s|%v", opt.LogHeader, value.topic, value.body))
 					}
 					return true
 				})
