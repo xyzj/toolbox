@@ -10,19 +10,6 @@ import (
 	"github.com/xyzj/toolbox/mapfx"
 )
 
-var defautlCacheCleanup = time.Second * 60
-
-// SetDefaultCacheCleanupTime sets the default time interval for cache cleanup.
-// The cleanup interval is used by the AnyCache to periodically check for expired entries.
-//
-// Parameters:
-// - t: The time duration for cache cleanup.
-//
-// This function does not return any value.
-func SetDefaultCacheCleanupTime(t time.Duration) {
-	defautlCacheCleanup = t
-}
-
 type cData[T any] struct {
 	expire time.Time
 	data   T
@@ -52,7 +39,7 @@ func NewAnyCacheWithExpireFunc[T any](expire time.Duration, expireFunc func(map[
 	x := &AnyCache[T]{
 		cacheExpire:  expire,
 		cache:        mapfx.NewStructMap[string, cData[T]](),
-		cacheCleanup: time.NewTicker(defautlCacheCleanup),
+		cacheCleanup: time.NewTicker(time.Second * 60),
 		closeChan:    make(chan bool, 1),
 	}
 	x.closed.Store(false)
@@ -108,7 +95,11 @@ func NewAnyCache[T any](expire time.Duration) *AnyCache[T] {
 	return NewAnyCacheWithExpireFunc[T](expire, nil)
 }
 
-// SetCleanUp 设置清理周期，不低于1秒
+// SetCleanUp sets the cleanup period for the cache. The cleanup period should not be less than 1 second.
+// If the cleanup period is less than 1 second, it will be automatically set to 1 second.
+//
+// Parameters:
+// - cleanup: The duration for the cleanup period.
 func (ac *AnyCache[T]) SetCleanUp(cleanup time.Duration) {
 	if cleanup < time.Second {
 		cleanup = time.Second
@@ -116,7 +107,8 @@ func (ac *AnyCache[T]) SetCleanUp(cleanup time.Duration) {
 	ac.cacheCleanup.Reset(cleanup)
 }
 
-// Close 关闭这个缓存，如果需要再次使用，应调用NewAnyCache方法重新初始化
+// Close closes this cache. If the cache needs to be used again, it should be reinitialized using the NewAnyCache method.
+// This method stops the cleanup goroutine, sends a signal to close the channel, clears the cache, and sets the cache pointer to nil.
 func (ac *AnyCache[T]) Close() {
 	ac.closed.Store(true)
 	ac.cacheCleanup.Stop()
@@ -125,7 +117,10 @@ func (ac *AnyCache[T]) Close() {
 	ac.cache = nil
 }
 
-// Clean 清空这个缓存
+// Clean clears all the entries from the cache.
+// If the cache is already closed, this function does nothing.
+//
+// This function is safe to call concurrently with other methods of the AnyCache.
 func (ac *AnyCache[T]) Clean() {
 	if ac.closed.Load() {
 		return
@@ -133,7 +128,16 @@ func (ac *AnyCache[T]) Clean() {
 	ac.cache.Clean()
 }
 
-// Len 返回缓存内容数量
+// Len returns the number of entries in the cache.
+// If the cache is closed, it returns 0.
+//
+// This function is safe to call concurrently with other methods of the AnyCache.
+//
+// Parameters:
+//   - ac: A pointer to the AnyCache instance.
+//
+// Return:
+//   - An integer representing the number of entries in the cache.
 func (ac *AnyCache[T]) Len() int {
 	if ac.closed.Load() {
 		return 0
@@ -141,19 +145,42 @@ func (ac *AnyCache[T]) Len() int {
 	return ac.cache.Len()
 }
 
-// Extension 将指定缓存延期
+// Extension extends the expiration time of the specified cache entry by the cache's default expiration duration.
+// If the cache entry does not exist, this function does nothing.
+//
+// Parameters:
+//   - key: The key of the cache entry to be extended.
+//
+// This function is safe to call concurrently with other methods of the AnyCache.
 func (ac *AnyCache[T]) Extension(key string) {
 	if x, ok := ac.cache.LoadForUpdate(key); ok {
 		x.expire = time.Now().Add(ac.cacheExpire)
 	}
 }
 
-// Store 添加缓存内容，如果缓存已关闭，会返回错误
+// Store adds a cache entry with the specified key and value.
+// If the cache is already closed, it returns an error.
+//
+// Parameters:
+//   - key: The unique identifier for the cache entry.
+//   - value: The data to be stored in the cache.
+//
+// Return:
+//   - An error if the cache is closed, otherwise nil.
 func (ac *AnyCache[T]) Store(key string, value T) error {
 	return ac.StoreWithExpire(key, value, ac.cacheExpire)
 }
 
-// StoreWithExpire 添加缓存内容，设置自定义的有效时间，如果缓存已关闭，会返回错误
+// StoreWithExpire adds a cache entry with the specified key, value, and expiration duration.
+// If the cache is already closed, it returns an error.
+//
+// Parameters:
+//   - key: The unique identifier for the cache entry.
+//   - value: The data to be stored in the cache.
+//   - expire: The duration for which the cache entry should be considered valid.
+//
+// Return:
+//   - An error if the cache is closed, otherwise nil.
 func (ac *AnyCache[T]) StoreWithExpire(key string, value T, expire time.Duration) error {
 	if ac.closed.Load() {
 		return fmt.Errorf("cache is closed")
@@ -170,7 +197,15 @@ func (ac *AnyCache[T]) StoreWithExpire(key string, value T, expire time.Duration
 	return nil
 }
 
-// Load 读取一个缓存内容，如果不存在，返回false
+// Load retrieves the value associated with the given key from the cache.
+// If the key is not found or the entry has expired, it returns the zero value of type T and false.
+//
+// Parameters:
+//   - key: The unique identifier for the cache entry.
+//
+// Return:
+//   - The value associated with the given key if found and not expired.
+//   - A boolean value indicating whether the key was found and not expired.
 func (ac *AnyCache[T]) Load(key string) (T, bool) {
 	x := new(T)
 	if ac.closed.Load() {
@@ -181,16 +216,28 @@ func (ac *AnyCache[T]) Load(key string) (T, bool) {
 		return *x, false
 	}
 	if time.Now().After(v.expire) {
-		// ac.cache.Delete(key) // 删除会有锁操作，因此还是放在清理方法里一次性做
+		// ac.cache.Delete(key) // Deleting here would cause a lock operation, so it's done in the cleanup method instead.
 		return *x, false
 	}
 	return v.data, true
 }
 
-// LoadOrStore 读取或者设置一个缓存内如
+// LoadOrStore reads or sets a cache entry.
 //
-//	当key存在时，返回缓存内容，并设置true
-//	当key不存在时，将内容加入缓存，返回设置内容，并设置false
+// When the key exists:
+// - Returns the cached content and sets the boolean return value to true.
+//
+// When the key does not exist:
+// - Adds the content to the cache and returns the set content, along with the boolean return value set to false.
+//
+// Parameters:
+// - key: The unique identifier for the cache entry.
+// - value: The data to be stored in the cache.
+//
+// Return:
+//   - The value associated with the given key if found and not expired.
+//   - A boolean value indicating whether the key was found and not expired.
+//     If the cache is closed, it returns the zero value of type T and false.
 func (ac *AnyCache[T]) LoadOrStore(key string, value T) (T, bool) {
 	x := new(T)
 	if ac.closed.Load() {
@@ -207,7 +254,14 @@ func (ac *AnyCache[T]) LoadOrStore(key string, value T) (T, bool) {
 	return v, true
 }
 
-// Delete 删除一个缓存内容
+// Delete removes a cache entry with the specified key.
+// If the cache is already closed, this function does nothing.
+//
+// Parameters:
+//   - key: The unique identifier for the cache entry to be deleted.
+//
+// Return:
+//   - None
 func (ac *AnyCache[T]) Delete(key string) {
 	if ac.closed.Load() {
 		return
@@ -215,7 +269,16 @@ func (ac *AnyCache[T]) Delete(key string) {
 	ac.cache.Delete(key)
 }
 
-// ForEach 遍历所有缓存内容
+// ForEach iterates over all the entries in the cache and applies the provided function to each entry.
+// The function will be called for each entry, excluding expired entries.
+// If the function returns false, the iteration will be stopped.
+//
+// Parameters:
+//   - f: A function that takes a key and a value as parameters and returns a boolean value.
+//     The function will be called for each entry in the cache.
+//
+// Return:
+//   - None
 func (ac *AnyCache[T]) ForEach(f func(key string, value T) bool) {
 	ac.cache.ForEach(func(key string, value *cData[T]) bool {
 		if time.Now().After(value.expire) {
