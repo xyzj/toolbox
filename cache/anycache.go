@@ -10,6 +10,19 @@ import (
 	"github.com/xyzj/toolbox/mapfx"
 )
 
+var defautlCacheCleanup = time.Second * 60
+
+// SetDefaultCacheCleanupTime sets the default time interval for cache cleanup.
+// The cleanup interval is used by the AnyCache to periodically check for expired entries.
+//
+// Parameters:
+// - t: The time duration for cache cleanup.
+//
+// This function does not return any value.
+func SetDefaultCacheCleanupTime(t time.Duration) {
+	defautlCacheCleanup = t
+}
+
 type cData[T any] struct {
 	expire time.Time
 	data   T
@@ -24,15 +37,22 @@ type AnyCache[T any] struct {
 	closeChan    chan bool
 }
 
-// NewAnyCacheWithExpireFunc 初始化一个新的缓存,在缓存过期时，会执行expireFunc函数
+// NewAnyCacheWithExpireFunc initializes a new cache with a specified expiration time and an optional expiration function.
+// The cache will create a goroutine to periodically check for expired entries.
+// When the cache is no longer needed, it should be closed using the Close() method.
 //
-//	 这个新缓存会创建一个线程检查内容是否过期，因此，当不再使用该缓存时，应该调用Close()方法关闭缓存
-//		默认每分钟清理一次过期缓存
+// Parameters:
+//   - expire: The duration for which cache entries should be considered valid.
+//   - expireFunc: An optional function to be executed when a cache entry expires.
+//     The function will receive a map of expired entries, where the key is the entry key and the value is the entry data.
+//
+// Return:
+// - A pointer to the newly created AnyCache instance.
 func NewAnyCacheWithExpireFunc[T any](expire time.Duration, expireFunc func(map[string]T)) *AnyCache[T] {
 	x := &AnyCache[T]{
 		cacheExpire:  expire,
 		cache:        mapfx.NewStructMap[string, cData[T]](),
-		cacheCleanup: time.NewTicker(time.Second * 60),
+		cacheCleanup: time.NewTicker(defautlCacheCleanup),
 		closeChan:    make(chan bool, 1),
 	}
 	x.closed.Store(false)
@@ -65,10 +85,25 @@ func NewAnyCacheWithExpireFunc[T any](expire time.Duration, expireFunc func(map[
 	return x
 }
 
-// NewAnyCache 初始化一个新的缓存
+// NewAnyCache initializes a new cache with a specified expiration time.
+// The cache will create a goroutine to periodically check for expired entries.
+// When the cache is no longer needed, it should be closed using the Close() method.
 //
-//	 这个新缓存会创建一个线程检查内容是否过期，因此，当不再使用该缓存时，应该调用Close()方法关闭缓存
-//		默认每分钟清理一次过期缓存
+// Parameters:
+//   - expire: The duration for which cache entries should be considered valid.
+//
+// Return:
+// - A pointer to the newly created AnyCache instance.
+//
+// Example:
+//
+//	cache := NewAnyCache[int](time.Minute * 5)
+//	defer cache.Close()
+//	cache.Store("key1", 100)
+//	value, ok := cache.Load("key1")
+//	if ok {
+//	    fmt.Println("Value:", value) // Output: Value: 100
+//	}
 func NewAnyCache[T any](expire time.Duration) *AnyCache[T] {
 	return NewAnyCacheWithExpireFunc[T](expire, nil)
 }

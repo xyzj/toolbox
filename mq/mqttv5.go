@@ -62,9 +62,13 @@ type MqttOpt struct {
 	// 日志前缀，默认 [MQTT]
 	LogHeader string
 	// 是否启用断连消息暂存
-	CacheFailed bool
+	EnableFailureCache bool
 	// 最大缓存消息数量，默认10000
-	MaxFailedCache int
+	FailureCacheMax int
+	// 消息缓存时间，默认一小时
+	FailureCacheExpire time.Duration
+	// 消息失效的处置方法
+	FailureCacheExpireFunc func(topic string, body []byte)
 }
 
 // MqttClientV5 mqtt客户端 5.0
@@ -124,16 +128,16 @@ func (m *MqttClientV5) WriteWithQos(topic string, body []byte, qos byte) error {
 		return nil
 	}
 	if !m.st.Load() || m.client == nil { // 未连接状态
-		if m.cnf.CacheFailed {
-			if m.failedCache.Len() < m.cnf.MaxFailedCache {
+		if m.cnf.EnableFailureCache {
+			if m.failedCache.Len() < m.cnf.FailureCacheMax {
 				m.failedCache.StoreWithExpire(
-					time.Now().Format("2006-01-02 15:04:05.999999999"),
+					time.Now().Format(time.RFC3339Nano),
 					&mqttMessage{
 						topic: topic,
 						body:  body,
 						qos:   qos,
 					},
-					time.Hour)
+					m.cnf.FailureCacheExpire)
 				return ErrorResendCache
 			}
 		}
@@ -183,8 +187,11 @@ func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte))
 	if opt.Logg == nil {
 		opt.Logg = &logger.NilLogger{}
 	}
-	if opt.MaxFailedCache == 0 {
-		opt.MaxFailedCache = 10000
+	if opt.FailureCacheMax == 0 {
+		opt.FailureCacheMax = 10000
+	}
+	if opt.FailureCacheExpire == 0 {
+		opt.FailureCacheExpire = time.Hour
 	}
 	if !strings.Contains(opt.Addr, "://") {
 		switch {
@@ -199,7 +206,11 @@ func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte))
 		return EmptyMQTTClientV5, err
 	}
 	conn := &atomic.Bool{}
-	failedCache := cache.NewAnyCache[*mqttMessage](time.Hour)
+	failedCache := cache.NewAnyCacheWithExpireFunc(opt.FailureCacheExpire, func(m map[string]*mqttMessage) {
+		for _, v := range m {
+			opt.FailureCacheExpireFunc(v.topic, v.body)
+		}
+	})
 	conf := autopaho.ClientConfig{
 		ServerUrls:                    []*url.URL{u},
 		KeepAlive:                     55,
@@ -225,7 +236,7 @@ func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte))
 			}
 			opt.Logg.System(opt.LogHeader + " Success connect to " + opt.Addr)
 			// 对失败消息进行补发
-			if opt.CacheFailed {
+			if opt.EnableFailureCache {
 				var err error
 				failedCache.ForEach(func(key string, value *mqttMessage) bool {
 					ctx, cancel := context.WithTimeout(context.TODO(), time.Second*3)
@@ -288,11 +299,7 @@ func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte))
 	}
 	ctx, cancel := context.WithTimeout(context.TODO(), time.Second*3)
 	defer cancel()
-	err = cm.AwaitConnection(ctx)
-	if err != nil {
-		funClose()
-		return EmptyMQTTClientV5, err
-	}
+	cm.AwaitConnection(ctx)
 
 	return &MqttClientV5{
 		client:      cm,
