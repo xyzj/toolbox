@@ -11,6 +11,7 @@ func TestJob2(t *testing.T) {
 	time.Sleep(time.Second * 3)
 	println(time.Until(t3).Seconds())
 }
+
 func TestJob1(t *testing.T) {
 	a := NewCrontab()
 	if a == nil {
@@ -24,7 +25,7 @@ func TestJob1(t *testing.T) {
 		t.Fatal(err.Error())
 		return
 	}
-	err = a.AddWithLimits("test2", 1, time.Now(), time.Second*15, func() {
+	err = a.AddWithLimits("test2", 2, time.Now(), time.Second*15, func() {
 		println("limit job " + time.Now().String())
 	})
 	if err != nil {
@@ -32,8 +33,8 @@ func TestJob1(t *testing.T) {
 		return
 	}
 	time.Sleep(time.Second * 2)
-	a.Remove("test1")
-	println(strings.Join(a.jobs.Keys(), ", "))
+	// a.Remove("test1")
+	println("---", strings.Join(a.jobs.Keys(), ", "))
 
 	time.Sleep(time.Minute * 5)
 }

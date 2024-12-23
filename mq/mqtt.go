@@ -94,6 +94,7 @@ func NewMQTTClient(opt *MqttOpt, recvCallback func(topic string, body []byte)) (
 	xopt.SetTLSConfig(opt.TLSConf)
 	xopt.SetWriteTimeout(opt.SendTimeo) // 发送3秒超时
 	xopt.SetConnectTimeout(time.Second * 10)
+	xopt.SetConnectRetry(true)
 	xopt.SetConnectionLostHandler(func(client mqtt.Client, err error) {
 		opt.Logg.Error(opt.LogHeader + " connection lost, " + err.Error())
 		doneSub = false

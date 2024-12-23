@@ -121,6 +121,12 @@ func (m *BaseMap[T]) Clone() map[string]T {
 	return x
 }
 
+func (m *BaseMap[T]) Values() []T {
+	m.locker.RLock()
+	defer m.locker.RUnlock()
+	return Values[string, T](m.data)
+}
+
 // ForEach 遍历map的key和value
 func (m *BaseMap[T]) ForEach(f func(key string, value T) bool) (err error) {
 	x := m.Clone()
