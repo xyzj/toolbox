@@ -2,7 +2,6 @@ package mq
 
 import (
 	"crypto/tls"
-	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -254,7 +253,7 @@ func (sessn *Session) initConsumer() {
 // Recv 接收消息
 func (sessn *Session) Recv() (<-chan amqp.Delivery, error) {
 	if !sessn.IsReady() {
-		return nil, fmt.Errorf("not connected")
+		return nil, errors.New("not connected")
 	}
 	c, err := sessn.channel.Consume(
 		sessn.queueName,
@@ -295,11 +294,11 @@ func (sessn *Session) BindKey(k ...string) error {
 			}
 		}
 		if len(s) > 0 {
-			return fmt.Errorf(strings.Join(s, ",") + " bind error:" + err.Error())
+			return errors.New(strings.Join(s, ",") + " bind error:" + err.Error())
 		}
 		return nil
 	}
-	return fmt.Errorf("failed bind key, channel not ready")
+	return errors.New("failed bind key, channel not ready")
 }
 
 // ClearQueue 清空队列
@@ -331,11 +330,11 @@ func (sessn *Session) UnBindKey(k ...string) error {
 			}
 		}
 		if len(s) > 0 {
-			return fmt.Errorf(strings.Join(s, ",") + " unbind error:" + err.Error())
+			return errors.New(strings.Join(s, ",") + " unbind error:" + err.Error())
 		}
 		return nil
 	}
-	return fmt.Errorf("failed Unbind key, channel not ready")
+	return errors.New("failed Unbind key, channel not ready")
 }
 
 func (sessn *Session) initProducer() {
@@ -366,7 +365,7 @@ func (sessn *Session) Send(f string, d []byte) error {
 //	},
 func (sessn *Session) SendCustom(d *RabbitMQData) error {
 	if !sessn.IsReady() {
-		return fmt.Errorf("MQ Producer not ready")
+		return errors.New("MQ Producer not ready")
 	}
 	// go func() {
 	defer func() {
