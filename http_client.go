@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-var httpClient = NewHTTPClient()
+var httpClient = NewHTTPClientWithTLS(nil)
 
 // DoRequestWithTimeout 发起请求
 func DoRequestWithTimeout(req *http.Request, timeo time.Duration) (int, []byte, map[string]string, error) {

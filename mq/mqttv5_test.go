@@ -21,9 +21,9 @@ var (
 
 func TestMQ5(t *testing.T) {
 	opt := &MqttOpt{
-		Addr:     "tls://127.0.0.1:1881",
-		Username: "arx7",
-		Passwd:   "arbalest",
+		Addr:     "mqtt://36.153.242.90:17002",
+		Username: "SH50_DEV",
+		Passwd:   "dasfs@8124545",
 		ClientID: "123122334",
 		Subscribe: map[string]byte{
 			"133/#":       1,
@@ -34,14 +34,14 @@ func TestMQ5(t *testing.T) {
 		Logg: logger.NewConsoleLogger(),
 	}
 	opt5 := &MqttOpt{
-		Addr: "tls://127.0.0.1:1881",
+		Addr: "mqtt://36.153.242.90:17002",
 		Subscribe: map[string]byte{
 			"#":         1,
 			"133/#":     1,
 			"123df/3/#": 1,
 		},
-		Username: "arx7",
-		Passwd:   "arbalest",
+		Username: "SH50_DEV",
+		Passwd:   "dasfs@8124545",
 		ClientID: "123122334e234d",
 		Logg:     logger.NewConsoleLogger(),
 	}

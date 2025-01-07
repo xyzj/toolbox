@@ -73,6 +73,9 @@ func (w *HASH) Hash(b []byte) CValue {
 // Returns:
 // - A pointer to the newly created HASH instance.
 func NewHash(t HashType, hmacKey []byte) *HASH {
+	if hmacKey == nil {
+		hmacKey = []byte{}
+	}
 	return &HASH{
 		pool: sync.Pool{
 			New: func() any {

@@ -5,7 +5,10 @@ import (
 	"time"
 )
 
-var sss = `{"token": "604213a4-9e4e-11ee-8e42-0242ac110004", "ts": 1711704865}`
+var (
+	sss = `{"token": "604213a4-9e4e-11ee-8e42-0242ac110004", "ts": 1711704865}`
+	ddd = `lcQu7bxnV3TYOq+OfZB6FA5yDsKgIh99VJKv0yZa7lhT+RGZMToE3zd4Rp7xOmWpRz+AJdbpjeGu5Zm03ylKtvpPZc3h0fidrSilOshekFbowosvsNViBhyUs+iTCpFIj+CKGKnoX2NOWRaznRIOvNHMr6XEMsKcA/9b+YDP9WnzNS0GQslEctGpQOjqqtcKRKs1hDor3BThyMWAGAsuplG81PwIgpntZqrq8C907HhoEThRokojlLmG5tpdam46/S1PhRARfRnlWOvWQeRcB/ncHhscPsffVdldsilckiXRhEr1I/A90JoK73S7f5nmhcTBILxvky41hwtVLodbOQ==`
+)
 
 // func RSAGenKey(bits int) error {
 // 	/*
@@ -58,18 +61,24 @@ func TestRSA(t *testing.T) {
 	// RSAGenKey(4096)
 	// d := NewRSA()
 	c := NewRSA()
-	c.SetPublicKey("MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAucwKlVo41ZZxnSRT396V3PoAOWuGX1MrqXvIE3UxKFt1Xd3rIB8YLXZnxsUgxAKau6KVHUhi2ymeHC2ZyQyQSADFgLQwWHgEONmF5QG3xRcPZAMNUq6pOYR0TfHVCPxpRCa64blagevE495XjAAr5ZLR35Kjdpi9Je4KpJlfQDKTr/k/pNKLyxJUG0aKVGv28aiWzc4SAk0YJGS0QXnD0aY6nTrPJ/CninB/wnIUaKFO9sRGAoxHx7cs/46qwQkFqt2hQalfezvEmVW4on//tGKP8aqCk4ak4mcSswpRB6sa1Uk4/tMqQxfCaM9VlUTdOxBkJZ/gPa3j8H4144zdgQIDAQAB")
+	// c.SetPublicKey("MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAucwKlVo41ZZxnSRT396V3PoAOWuGX1MrqXvIE3UxKFt1Xd3rIB8YLXZnxsUgxAKau6KVHUhi2ymeHC2ZyQyQSADFgLQwWHgEONmF5QG3xRcPZAMNUq6pOYR0TfHVCPxpRCa64blagevE495XjAAr5ZLR35Kjdpi9Je4KpJlfQDKTr/k/pNKLyxJUG0aKVGv28aiWzc4SAk0YJGS0QXnD0aY6nTrPJ/CninB/wnIUaKFO9sRGAoxHx7cs/46qwQkFqt2hQalfezvEmVW4on//tGKP8aqCk4ak4mcSswpRB6sa1Uk4/tMqQxfCaM9VlUTdOxBkJZ/gPa3j8H4144zdgQIDAQAB")
 	c.SetPrivateKey("MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC5zAqVWjjVlnGdJFPf3pXc+gA5a4ZfUyupe8gTdTEoW3Vd3esgHxgtdmfGxSDEApq7opUdSGLbKZ4cLZnJDJBIAMWAtDBYeAQ42YXlAbfFFw9kAw1Srqk5hHRN8dUI/GlEJrrhuVqB68Tj3leMACvlktHfkqN2mL0l7gqkmV9AMpOv+T+k0ovLElQbRopUa/bxqJbNzhICTRgkZLRBecPRpjqdOs8n8KeKcH/CchRooU72xEYCjEfHtyz/jqrBCQWq3aFBqV97O8SZVbiif/+0Yo/xqoKThqTiZxKzClEHqxrVSTj+0ypDF8Joz1WVRN07EGQln+A9rePwfjXjjN2BAgMBAAECggEABCP4bmii0Ju4L3TSS7BlrZWCsMTlKzWqyO2hwVFAxbH4FR3vcflPbB/x4xuchdG7CghvA0aMMW8lf2JCxZi6lGgz/pDFbQtLqMqsMbTOmB1R8fwhbWDIE6iQgPYtNbSOUf789i/PxQpwilV3pP6R+91AQRe+/dMcj/5UjWN/nGoaYcftEpUxJyqfcU2vq7a4lJABaI1EfDAY0AA3F6NKHo1U62xyjlowtgDVhDQOqwZQe6GdCDduyUnvT0jg+mswArX5/CqbpuhKmYeanvOf5OWn7pT/HR7LwI85FaA0Jjd14SogwszQ7vzL7ldcK1FMj8iRtEX03Hwy2DcbLTiZ4QKBgQDrWlv50omYBlwD77Hw29uwMOKBjq8s6pfG2pVphXd4l4plLmv+dSaH2yH4jhvFqwOucqG6kZEV93CN0rCrXvV7hGr17qSoDHUGFdySWuI0dNg9nsWBjYEpPk1nmSPaSLZlCRLTlWRqCewQ4dBs6cgX0q1iy1wzXtNJgP4n3F26CQKBgQDKGLzC+LaM0JVA2I/Io7O4Mt4aDolfXCRFcIrT6y4+omkM897bbPvklKfrMk7337YT3IxMi3R9UkvzXCkPXoqoDbxA5x2jcqR5qK9ff+05Ul/YdfasV3S41wYv0QUXDkCAwLrsN3avbj2smGKkiqCjNpVmsYbfXLI7AmVBaoVFuQKBgQCFEecVPrw7b8URGLLUi4sQeONo+4MCc3Xzol1+d09QqOZARVocWqK5h+YSQk9jmUkQlpHpCistb2V9WtY3Xw6PkxRjD1acCccU9MFtIuPpYvNtC9uCX77a0fY0EDtcTWaLg/DYHwzSg9+sv/D308sl5SHRzUfJZ+ExGzUY1plL+QKBgQC4TCjPkKpA7fI+SX+N1COPpeu/TWRfLxLwtDoWGdF5UviD1F12MwPfJuWe6aj0CPHtWOIk58PaiVMz4eab2naN3MDBW0I/DMwLGhab+3hlHsbDCohiD/skmQpOTsnahaezAo8z3TyBrQHXRLwoGzd0v9Es7lX1mX37rCqUpkRVGQKBgDDFptCZPtXCV8b5kM38ZPvxXMKoP1ts+u2YWvW+W762TPC88PiWl/IhFd5izBBVVOL8tJArWi7m0B1sMById5yPz6XGNQuGyCQlT3XXKyUK7GKZP9e2Q0WbqKQYPrzaFjWzaRUR9PrgEOStiz5Oj0XV4Or4YStyVYipbMDUlw/N")
 	// c.GenerateKey(RSA2048)
 	// sss := "1267312shfskdfadfaf" // toolbox.GetRandomString(30002, true) // "1267312shfskdfadfaf"
-	bb := []byte(sss)
-	x, err := c.Encode(bb)
+	s, err := c.DecodeBase64(ddd)
 	if err != nil {
 		println(err.Error())
+		return
 	}
-	println("base64: ", x.Base64String(), "\n")
-	println("hex: ", x.HexString(), "\n")
-	println("raw bytes: ", string(x.Bytes()))
+	println(s)
+	// bb := []byte(sss)
+	// x, err := c.Encode(bb)
+	// if err != nil {
+	// 	println(err.Error())
+	// }
+	// println("base64: ", x.Base64String(), "\n")
+	// println("hex: ", x.HexString(), "\n")
+	// println("raw bytes: ", string(x.Bytes()))
 	// w := sync.WaitGroup{}
 	// w.Add(20000)
 	// for i := 0; i < 20000; i++ {
