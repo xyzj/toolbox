@@ -230,7 +230,7 @@ func (w *Writer) newFile() {
 	if w.enablegz {
 		w.zipFile(w.nameOld)
 	}
-	w.fno.Write(lineEnd)
+	// w.fno.Write(lineEnd)
 }
 
 // 检查文件大小,返回是否需要切分文件
