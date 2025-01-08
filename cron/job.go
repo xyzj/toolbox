@@ -17,7 +17,7 @@
 package cron
 
 import (
-	"fmt"
+	"errors"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -50,11 +50,11 @@ type Crontab struct {
 //	do: 任务执行内容
 func (c *Crontab) Add(name, spec string, do func()) error {
 	if !c.running {
-		return fmt.Errorf("scheduler is not ready")
+		return errors.New("scheduler is not ready")
 	}
 
 	if c.jobs.Has(name) {
-		return fmt.Errorf("job " + name + " already exist")
+		return errors.New("job " + name + " already exist")
 	}
 
 	if _, err := c.parser.Parse(spec); err != nil {
@@ -88,14 +88,14 @@ func (c *Crontab) Add(name, spec string, do func()) error {
 //	do: 任务执行内容
 func (c *Crontab) AddWithLimits(name string, limits uint, startAt time.Time, dur time.Duration, do func()) error {
 	if !c.running {
-		return fmt.Errorf("scheduler is not ready")
+		return errors.New("scheduler is not ready")
 	}
 
 	if c.jobs.Has(name) {
-		return fmt.Errorf("job " + name + " already exist")
+		return errors.New("job " + name + " already exist")
 	}
 	if limits == 0 {
-		return fmt.Errorf("limits should be more than zero")
+		return errors.New("limits should be more than zero")
 	}
 	flimit := func(jobName string) {
 		if j, ok := c.jobs.LoadForUpdate(jobName); ok {
@@ -143,7 +143,7 @@ func (c *Crontab) AddWithLimits(name string, limits uint, startAt time.Time, dur
 //	name： 任务名称
 func (c *Crontab) Remove(name ...string) error {
 	if !c.running {
-		return fmt.Errorf("scheduler is not ready")
+		return errors.New("scheduler is not ready")
 	}
 	c.cron.RemoveByTags(name...)
 	c.jobs.DeleteMore(name...)
@@ -155,11 +155,11 @@ func (c *Crontab) Remove(name ...string) error {
 //	name： 任务名称
 func (c *Crontab) Pause(name string) error {
 	if !c.running {
-		return fmt.Errorf("scheduler is not ready")
+		return errors.New("scheduler is not ready")
 	}
 	if j, ok := c.jobs.LoadForUpdate(name); ok {
 		if j.spec == "" {
-			return fmt.Errorf("limits job can not be pause, can only be remove")
+			return errors.New("limits job can not be pause, can only be remove")
 		}
 		if j.running {
 			c.cron.RemoveByTags(name)
@@ -167,7 +167,7 @@ func (c *Crontab) Pause(name string) error {
 		}
 		return nil
 	}
-	return fmt.Errorf("job " + name + " does not exist")
+	return errors.New("job " + name + " does not exist")
 }
 
 // Resume 继续执行指定的循环任务
@@ -175,7 +175,7 @@ func (c *Crontab) Pause(name string) error {
 //	name： 任务名称
 func (c *Crontab) Resume(name string) error {
 	if !c.running {
-		return fmt.Errorf("scheduler is not ready")
+		return errors.New("scheduler is not ready")
 	}
 
 	if j, ok := c.jobs.LoadForUpdate(name); ok {
@@ -195,7 +195,7 @@ func (c *Crontab) Resume(name string) error {
 		}
 		return nil
 	}
-	return fmt.Errorf("job " + name + " does not exist")
+	return errors.New("job " + name + " does not exist")
 }
 
 // Clean 清除所有任务
