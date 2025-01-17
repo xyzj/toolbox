@@ -5,13 +5,44 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 	"unicode/utf16"
+	"unicode/utf8"
+
+	"golang.org/x/text/encoding/simplifiedchinese"
+	"golang.org/x/text/transform"
 )
+
+// GbkToUtf8 gbk编码转utf8
+func GbkToUtf8(s []byte) ([]byte, error) {
+	if utf8.Valid(s) {
+		return s, nil
+	}
+	reader := transform.NewReader(bytes.NewReader(s), simplifiedchinese.GBK.NewDecoder())
+	d, e := io.ReadAll(reader)
+	if e != nil {
+		return s, e
+	}
+	return d, nil
+}
+
+// Utf8ToGbk utf8编码转gbk
+func Utf8ToGbk(s []byte) ([]byte, error) {
+	// if !isUtf8(s) {
+	// 	return s, nil
+	// }
+	reader := transform.NewReader(bytes.NewReader(s), simplifiedchinese.GBK.NewEncoder())
+	d, e := io.ReadAll(reader)
+	if e != nil {
+		return s, e
+	}
+	return d, nil
+}
 
 // Float32ToByte 32位浮点转bytes
 func Float32ToByte(float float32) []byte {
