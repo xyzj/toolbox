@@ -6,8 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-
-	"github.com/xyzj/toolbox"
+	"time"
 )
 
 var (
@@ -19,9 +18,8 @@ var (
 )
 
 func TestTime(t *testing.T) {
-	t1 := "2015-04-02 00:00:00"
-	a := toolbox.Time2Stampf(t1, toolbox.DateTimeFormat, 8)
-	println(a)
+	a, b := time.Now().Zone()
+	println(a, b, float32(b)/60/60)
 }
 
 type aaa struct {

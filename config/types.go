@@ -4,6 +4,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/xyzj/toolbox"
 	"github.com/xyzj/toolbox/json"
@@ -306,7 +307,8 @@ func (v *Value) TryTimestamp(f string) int64 {
 	if f == "" {
 		f = toolbox.DateTimeFormat
 	}
-	return toolbox.Time2Stampf(v.nstr, f, 8)
+	_, tz := time.Now().Zone()
+	return toolbox.Time2Stampf(v.nstr, f, float32(tz)/3600)
 }
 
 // PwdString 序列化反序列化时可自动加密解密字符串，用于敏感字段
