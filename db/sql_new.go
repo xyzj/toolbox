@@ -7,6 +7,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -292,13 +293,13 @@ func (d *Conn) SQLDBByName(dbname string) (*sql.DB, error) {
 			return v.sqldb, nil
 		}
 	}
-	return nil, fmt.Errorf(dbname + " not found")
+	return nil, errors.New(dbname + " not found")
 }
 
 // SetDefaultDB 连接多个数据库的时候，设置默认的数据库名称
 func (d *Conn) SetDefaultDB(dbidx int) error {
 	if v, ok := d.dbs[dbidx]; !ok {
-		return fmt.Errorf(v.name + " not found")
+		return errors.New(v.name + " not found")
 	}
 	d.defaultDB = dbidx
 	return nil
@@ -323,7 +324,7 @@ func (d *Conn) ORM(dbidx int) (*gorm.DB, error) {
 	if ok {
 		return v.ormdb, nil
 	}
-	return nil, fmt.Errorf(v.name + " not found")
+	return nil, errors.New(v.name + " not found")
 }
 
 // SQLDB 指定要返回的sql.db实例
@@ -334,7 +335,7 @@ func (d *Conn) SQLDB(dbidx int) (*sql.DB, error) {
 	if ok {
 		return v.sqldb, nil
 	}
-	return nil, fmt.Errorf(v.name + " not found")
+	return nil, errors.New(v.name + " not found")
 }
 
 // IsReady 检查状态，仅检查默认库的状态
@@ -389,7 +390,7 @@ func checkSQL(s string) error {
 	if toolbox.CheckSQLInject(s) {
 		return nil
 	}
-	return fmt.Errorf("SQL statement has risk of injection: " + s)
+	return errors.New("SQL statement has risk of injection: " + s)
 }
 
 func newResult() *QueryData {

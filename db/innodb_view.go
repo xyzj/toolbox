@@ -1,6 +1,7 @@
 package db
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -9,7 +10,7 @@ import (
 func (d *Conn) UnionView(dbname, tableName string, maxSubTables, maxTableSize, maxTableRows int) error {
 	// 判断是否符合分表要求
 	if d.cfg.DriverType != DriveMySQL {
-		return fmt.Errorf("this function only support mysql driver")
+		return errors.New("this function only support mysql driver")
 	}
 	dbidx := 1
 	for k, v := range d.dbs {
@@ -18,7 +19,7 @@ func (d *Conn) UnionView(dbname, tableName string, maxSubTables, maxTableSize, m
 		}
 	}
 	if !d.IsReady() {
-		return fmt.Errorf("sql connection is not ready")
+		return errors.New("sql connection is not ready")
 	}
 	// view只能按照数据条数
 	strsql := `select count(*) from ` + tableName
@@ -27,7 +28,7 @@ func (d *Conn) UnionView(dbname, tableName string, maxSubTables, maxTableSize, m
 		return err
 	}
 	if ans.Rows[0].VCells[0].TryInt() < maxTableRows {
-		return fmt.Errorf("nothing to do")
+		return errors.New("nothing to do")
 	}
 	// 将主表重命名为日期后缀子表
 	newTableName := tableName + "_" + time.Now().Format("200601021504")
@@ -74,7 +75,7 @@ func (d *Conn) UnionView(dbname, tableName string, maxSubTables, maxTableSize, m
 // MergeTable 进行分表操作
 func (d *Conn) MergeTable(dbname, tableName string, maxSubTables, maxTableSize, maxTableRows int) error {
 	if d.cfg.DriverType != DriveMySQL {
-		return fmt.Errorf("this function only support mysql driver")
+		return errors.New("this function only support mysql driver")
 	}
 	dbidx := 1
 	for k, v := range d.dbs {
@@ -90,11 +91,11 @@ func (d *Conn) MergeTable(dbname, tableName string, maxSubTables, maxTableSize, 
 		return err
 	}
 	if ans.Total == 0 {
-		return fmt.Errorf("table " + dbname + "." + tableName + " not found")
+		return errors.New("table " + dbname + "." + tableName + " not found")
 	}
 	engine := ans.Rows[0].Cells[0]
 	if strings.ToLower(engine) != "mrg_myisam" {
-		return fmt.Errorf(dbname + "." + tableName + "'s engine is not 'mrg-myisam'")
+		return errors.New(dbname + "." + tableName + "'s engine is not 'mrg-myisam'")
 	}
 	// 找到所有以指定命名开头的所有表
 	strsql = "select table_name from information_schema.tables where table_schema=? and engine='MyISAM' and table_type='BASE TABLE' and table_name like '" + tableName + "_%' order by create_time desc,table_name desc limit ?"
@@ -107,7 +108,7 @@ func (d *Conn) MergeTable(dbname, tableName string, maxSubTables, maxTableSize, 
 		subTablelist = append(subTablelist, row.Cells[0])
 	}
 	if len(subTablelist) == 0 {
-		return fmt.Errorf("no sub tables found")
+		return errors.New("no sub tables found")
 	}
 	// 检查子表大小
 	strsql = `select round(sum(DATA_LENGTH/1000000)),sum(table_rows) from information_schema.tables where table_schema=? and table_name=?`
@@ -123,7 +124,7 @@ func (d *Conn) MergeTable(dbname, tableName string, maxSubTables, maxTableSize, 
 	strsql = "create table " + subTableLatest + " like " + subTablelist[0]
 	_, _, err = d.ExecByDB(dbidx, strsql)
 	if err != nil {
-		return fmt.Errorf("create new table " + subTableLatest + " error: " + err.Error())
+		return errors.New("create new table " + subTableLatest + " error: " + err.Error())
 	}
 	newsub := make([]string, 0)
 	newsub = append(newsub, subTableLatest)
@@ -132,7 +133,7 @@ func (d *Conn) MergeTable(dbname, tableName string, maxSubTables, maxTableSize, 
 	strsql = "ALTER TABLE " + tableName + " ENGINE = MRG_MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci INSERT_METHOD=FIRST UNION=(" + strings.Join(newsub, ",") + ");"
 	_, _, err = d.ExecByDB(dbidx, strsql)
 	if err != nil {
-		return fmt.Errorf("alter table " + tableName + " error: " + err.Error())
+		return errors.New("alter table " + tableName + " error: " + err.Error())
 	}
 	return nil
 }
@@ -142,7 +143,7 @@ func (d *Conn) MergeTable(dbname, tableName string, maxSubTables, maxTableSize, 
 // tableName和alter语句中的table name必须一致
 func (d *Conn) AlterMergeTable(dbname, tableName, alterStr string, maxSubTables int) error {
 	if d.cfg.DriverType != DriveMySQL {
-		return fmt.Errorf("this function only support mysql driver")
+		return errors.New("this function only support mysql driver")
 	}
 	if maxSubTables < 1 {
 		maxSubTables = 1
@@ -166,7 +167,7 @@ func (d *Conn) AlterMergeTable(dbname, tableName, alterStr string, maxSubTables 
 	}
 	engine = ans.Rows[0].Cells[0] // 表存在的情况下，检查引擎是否符合要求
 	if strings.ToLower(engine) != "mrg_myisam" {
-		return fmt.Errorf("engine " + engine + " is not support")
+		return errors.New("engine " + engine + " is not support")
 	}
 TODO:
 	// 找到所有以指定命名开头的所有表
@@ -180,7 +181,7 @@ TODO:
 		subTablelist = append(subTablelist, row.Cells[0])
 	}
 	if len(subTablelist) == 0 {
-		return fmt.Errorf("no sub tables found")
+		return errors.New("no sub tables found")
 	}
 	if maxSubTables > len(subTablelist) {
 		maxSubTables = len(subTablelist)
@@ -218,7 +219,7 @@ TODO:
 		return err
 	}
 	if ans.Total == 0 {
-		return fmt.Errorf("show create table " + subTablelist[0] + " failed")
+		return errors.New("show create table " + subTablelist[0] + " failed")
 	}
 	// 进行语句替换
 	strsql = ans.Rows[0].Cells[1]
