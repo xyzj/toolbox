@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/xyzj/deepcopy"
 	"github.com/xyzj/toolbox/json"
 )
 
@@ -26,7 +27,7 @@ func (v CValue) Len() int {
 
 // Bytes 加密结果
 func (v CValue) Bytes() []byte {
-	return v
+	return []byte(deepcopy.CopyAny[CValue](v))
 }
 
 // HexString 加密结果以hex字符串形式输出

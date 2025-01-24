@@ -2,8 +2,6 @@ module github.com/xyzj/toolbox
 
 go 1.22.0
 
-toolchain go1.23.2
-
 require (
 	github.com/bytedance/sonic v1.12.5
 	github.com/eclipse/paho.golang v0.22.0
@@ -18,7 +16,6 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/klauspost/compress v1.17.9
 	github.com/microsoft/go-mssqldb v1.7.2
-	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
 	github.com/pkg/errors v0.9.1
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible
@@ -29,6 +26,7 @@ require (
 	github.com/tjfoc/gmsm v1.4.2-0.20220114090716-36b992c51540
 	github.com/tovenja/cron/v3 v3.0.2
 	github.com/unrolled/secure v1.14.0
+	github.com/xyzj/deepcopy v0.0.0-20250124011539-76155efb897b
 	go.etcd.io/bbolt v1.3.10
 	go.uber.org/ratelimit v0.3.1
 	golang.org/x/text v0.20.0

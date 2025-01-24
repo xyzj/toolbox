@@ -15,11 +15,11 @@ import (
 	"github.com/go-echarts/go-echarts/v2/components"
 	"github.com/go-echarts/go-echarts/v2/opts"
 	"github.com/go-echarts/go-echarts/v2/types"
-	"github.com/mohae/deepcopy"
 	"github.com/shirou/gopsutil/net"
 	"github.com/shirou/gopsutil/process"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
+	"github.com/xyzj/deepcopy"
 	"github.com/xyzj/toolbox"
 	"github.com/xyzj/toolbox/cache"
 	"github.com/xyzj/toolbox/json"
@@ -141,7 +141,7 @@ func StartRecord(opt *RecordOpt) *Recorder {
 			connst, _ = proce.Connections()
 			r.lastProc.Conns = int32(len(connst))
 			r.lastProc.Dt = time.Now().Unix()
-			r.procCache.Store(time.Now().Format("01-02 15:04:05"), deepcopy.Copy(r.lastProc).(*procStatus))
+			r.procCache.Store(time.Now().Format("01-02 15:04:05"), deepcopy.CopyAny[*procStatus](r.lastProc))
 		}
 		t := time.NewTicker(r.opt.Timer)
 		c := 0

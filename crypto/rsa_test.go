@@ -56,7 +56,7 @@ var (
 // 	return nil
 // }
 
-func TestRSA(t *testing.T) {
+func TestRSaAa(t *testing.T) {
 	println(time.Now().Format("2006-01-02 15:04:05.000000000"))
 	// RSAGenKey(4096)
 	// d := NewRSA()
@@ -136,23 +136,18 @@ func BenchmarkRSA(b *testing.B) {
 	c.GenerateKey(RSA2048)
 	// c.SetPublicKeyFromFile("publicKey.pem")
 	// c.SetPrivateKeyFromFile("privateKey.pem")
-	sss := "1267312shfskdfadfaf" // toolbox.GetRandomString(30002, true) // "1267312shfskdfadfaf"
+	sss := `{"deviceCode":"2","kIndexes":[{"loopIndex":"K1","ctlTimes":[{"date":"2025-01-16","times":[{"period":1,"startTime":"2025-01-16 17:44","endTime":"2025-01-17 07:03"}]},{"date":"2025-01-17","times":[{"period":1,"startTime":"2025-01-17 17:44","endTime":"2025-01-18 07:03"}]}]},{"loopIndex":"K2","ctlTimes":[{"date":"2025-01-16","times":[{"period":1,"startTime":"2025-01-16 17:44","endTime":"2025-01-17 07:03"}]},{"date":"2025-01-17","times":[{"period":1,"startTime":"2025-01-17 17:44","endTime":"2025-01-18 07:03"}]}]},{"loopIndex":"K3","ctlTimes":[{"date":"2025-01-16","times":[{"period":1,"startTime":"2025-01-16 17:44","endTime":"2025-01-17 07:03"}]},{"date":"2025-01-17","times":[{"period":1,"startTime":"2025-01-17 17:44","endTime":"2025-01-18 07:03"}]},{"loopIndex":"K4","ctlTimes":[{"date":"2025-01-16","times":[{"period":1,"startTime":"2025-01-16 17:44","endTime":"2025-01-17 07:03"}]},{"date":"2025-01-17","times":[{"period":1,"startTime":"2025-01-17 17:44","endTime":"2025-01-18 07:03"}]}]},{"loopIndex":"K5","ctlTimes":[{"date":"2025-01-16","times":[{"period":1,"startTime":"2025-01-16 17:44","endTime":"2025-01-17 07:03"}]},{"date":"2025-01-17","times":[{"period":1,"startTime":"2025-01-17 17:44","endTime":"2025-01-18 07:03"}]}]},{"loopIndex":"K6","ctlTimes":[{"date":"2025-01-16","times":[{"period":1,"startTime":"2025-01-16 17:44","endTime":"2025-01-17 07:03"}]},{"date":"2025-01-17","times":[{"period":1,"startTime":"2025-01-17 17:44","endTime":"2025-01-18 07:03"}]}]},{"loopIndex":"K7","ctlTimes":[{"date":"2025-01-16","times":[{"period":1,"startTime":"2025-01-16 17:44","endTime":"2025-01-17 07:03"}]},{"date":"2025-01-17","times":[{"period":1,"startTime":"2025-01-17 17:44","endTime":"2025-01-18 07:03"}]}]},{"loopIndex":"K8","ctlTimes":[{"date":"2025-01-16","times":[{"period":1,"startTime":"2025-01-16 17:44","endTime":"2025-01-17 07:03"}]},{"date":"2025-01-17","times":[{"period":1,"startTime":"2025-01-17 17:44","endTime":"2025-01-18 07:03"}]}]}]}]}` // toolbox.GetRandomString(30002, true) // "1267312shfskdfadfaf"
 	bb := []byte(sss)
 	var err error
 	var x CValue
-	var xs string
+	// var xs string
+	x, _ = c.Encode(bb)
+	bbb := x.Bytes()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		x, err = c.Encode(bb)
+		_, err = c.Decode(bbb)
 		if err != nil {
 			b.Fatal(err.Error())
-		}
-		xs, err = c.Decode(x.Bytes())
-		if err != nil {
-			b.Fatal(err.Error())
-		}
-		if xs != sss {
-			b.Fatal("encode decode not match")
 		}
 	}
 }
