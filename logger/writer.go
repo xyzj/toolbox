@@ -146,7 +146,11 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 		xp = append(xp, lineEnd...)
 	}
 	if w.withFile {
-		w.chanGoWrite <- xp
+		if w.delayWrite {
+			w.chanGoWrite <- xp
+		} else {
+			w.fno.Write(xp)
+		}
 	} else {
 		w.out.Write(xp)
 	}
@@ -167,13 +171,13 @@ func (w *Writer) startWrite() {
 		for {
 			select {
 			case p := <-w.chanGoWrite:
-				if w.withFile {
-					if w.delayWrite {
-						buftick.Write(p)
-					} else {
-						w.fno.Write(p)
-					}
-				}
+				// if w.withFile {
+				// 	if w.delayWrite {
+				buftick.Write(p)
+				// } else {
+				// 	w.fno.Write(p)
+				// }
+				// }
 				// w.out.Write(buf.Bytes())
 			case <-tc.C:
 				if w.rollfile {
