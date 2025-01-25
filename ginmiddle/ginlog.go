@@ -112,7 +112,7 @@ func LoggerWithRolling(logdir, filename string, maxdays int, skippath ...string)
 		AutoRoll:     true,
 		FileDir:      logdir,
 		Filename:     filename,
-		MaxDays:      maxdays,
+		FileDays:     maxdays,
 		CompressFile: true,
 		DelayWrite:   true,
 	})

@@ -71,7 +71,7 @@ func NewLogger(opt *OptLog) Logger {
 	return &MultiLogger{
 		outs: []*StdLogger{
 			{
-				LogLevel: opt.FileLevel,
+				LogLevel: opt.LogLevel,
 				Out:      NewWriter(opt),
 			},
 		},

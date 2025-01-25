@@ -37,28 +37,28 @@ type OptLog struct {
 	Filename string
 	// FileDir 日志存放目录
 	FileDir string
-	// AutoRoll 是否自动滚动日志文件，true-依据MaxDays和MaxSize自动切分日志文件，日志文件名会额外追加日期时间戳‘yymmdd’和序号
+	// FileSize 单个日志文件最大大小，AutoRoll==true时有效
+	FileSize int64
+	// FileDays 日志最大保留天数，AutoRoll==true时有效
+	FileDays int
+	// AutoRoll 是否自动滚动日志文件，true-依据FileDays和FileSize自动切分日志文件，日志文件名会额外追加日期时间戳‘yymmdd’和序号
 	AutoRoll bool
-	// MaxDays 日志最大保留天数，AutoRoll==true时有效
-	MaxDays int
-	// MaxSize 单个日志文件最大大小，AutoRoll==true时有效
-	MaxSize int64
 	// CompressFile 是否压缩旧日志文件，AutoRoll==true时有效
 	CompressFile bool
 	// DelayWrite 延迟写入，每秒检查写入缓存，并写入文件，非实时写入
 	DelayWrite bool
-	// 日志等级
-	FileLevel LogLevel
+	// LogLevel 日志等级
+	LogLevel LogLevel
 }
 
 func (o *OptLog) ensureDefaults() {
-	if o.MaxDays == 0 && o.MaxSize == 0 {
+	if o.FileDays == 0 && o.FileSize == 0 {
 		o.AutoRoll = false
 	} else {
 		o.AutoRoll = true
 	}
-	if o.MaxSize < maxFileSize {
-		o.MaxSize = maxFileSize
+	if o.FileSize < maxFileSize {
+		o.FileSize = maxFileSize
 	}
 }
 
@@ -79,19 +79,19 @@ func NewWriter(opt *OptLog) io.Writer {
 	opt.ensureDefaults()
 	t := time.Now()
 	mylog := &Writer{
-		out:         os.Stdout,
-		expired:     int64(opt.MaxDays)*24*60*60 - 10,
-		fileMaxSize: opt.MaxSize,
-		fname:       opt.Filename,
-		rollfile:    opt.AutoRoll,
-		fileDay:     t.Day(),
-		fileHour:    t.Hour(),
-		logDir:      opt.FileDir,
-		chanGoWrite: make(chan []byte, 2000),
-		enablegz:    opt.CompressFile,
-		withFile:    opt.Filename != "",
-		delayWrite:  opt.DelayWrite,
-		timeFormat:  LongTimeFormat,
+		out:          os.Stdout,
+		expired:      int64(opt.FileDays)*24*60*60 - 10,
+		fileFileSize: opt.FileSize,
+		fname:        opt.Filename,
+		rollfile:     opt.AutoRoll,
+		fileDay:      t.Day(),
+		fileHour:     t.Hour(),
+		logDir:       opt.FileDir,
+		chanGoWrite:  make(chan []byte, 2000),
+		enablegz:     opt.CompressFile,
+		withFile:     opt.Filename != "",
+		delayWrite:   opt.DelayWrite,
+		timeFormat:   LongTimeFormat,
 	}
 	if opt.AutoRoll {
 		mylog.timeFormat = ShortTimeFormat
@@ -118,24 +118,24 @@ func NewWriter(opt *OptLog) io.Writer {
 
 // Writer 自定义Writer
 type Writer struct {
-	chanGoWrite chan []byte
-	out         io.Writer
-	fno         *os.File
-	pathNow     string
-	fname       string
-	nameNow     string
-	nameOld     string
-	logDir      string
-	timeFormat  string
-	expired     int64
-	fileMaxSize int64
-	fileDay     int
-	fileHour    int
-	fileIndex   byte
-	enablegz    bool
-	rollfile    bool
-	withFile    bool
-	delayWrite  bool
+	chanGoWrite  chan []byte
+	out          io.Writer
+	fno          *os.File
+	pathNow      string
+	fname        string
+	nameNow      string
+	nameOld      string
+	logDir       string
+	timeFormat   string
+	expired      int64
+	fileFileSize int64
+	fileDay      int
+	fileHour     int
+	fileIndex    byte
+	enablegz     bool
+	rollfile     bool
+	withFile     bool
+	delayWrite   bool
 }
 
 // Write 异步写入日志，返回固定为 0, nil
@@ -246,7 +246,7 @@ func (w *Writer) rolledWithFileSize() bool {
 	w.fileHour = time.Now().Hour()
 	fs, ex := os.Stat(w.pathNow)
 	if ex == nil {
-		if fs.Size() > w.fileMaxSize {
+		if fs.Size() > w.fileFileSize {
 			if w.fileIndex == 255 {
 				w.fileIndex = 0
 			} else {
