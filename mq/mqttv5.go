@@ -205,7 +205,9 @@ func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte))
 	if err != nil {
 		return EmptyMQTTClientV5, err
 	}
-	conn := &atomic.Bool{}
+	connSt := &atomic.Bool{}
+	code142 := &atomic.Bool{}
+	code133 := &atomic.Bool{}
 	failedCache := cache.NewAnyCacheWithExpireFunc(opt.FailureCacheExpire, func(m map[string]*mqttMessage) {
 		for _, v := range m {
 			opt.FailureCacheExpireFunc(v.topic, v.body)
@@ -214,14 +216,28 @@ func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte))
 	conf := autopaho.ClientConfig{
 		ServerUrls:                    []*url.URL{u},
 		KeepAlive:                     55,
+		SessionExpiryInterval:         0,
 		CleanStartOnInitialConnection: true,
 		ConnectUsername:               opt.Username,
 		ConnectPassword:               []byte(opt.Passwd),
 		TlsCfg:                        opt.TLSConf,
-		ConnectRetryDelay:             time.Second * time.Duration(rand.Int31n(30)+30),
 		ConnectTimeout:                time.Second * 5,
+		ReconnectBackoff: func(i int) time.Duration {
+			if i <= 0 {
+				return 0
+			}
+			return time.Second * time.Duration(rand.Int31n(30)+30)
+		},
+		ConnectPacketBuilder: func(c *paho.Connect, u *url.URL) (*paho.Connect, error) {
+			if code142.Load() || code133.Load() {
+				c.ClientID = time.Now().Format("2006-01-02T15:04:05Z")
+			}
+			return c, nil
+		},
 		OnConnectionUp: func(cm *autopaho.ConnectionManager, c *paho.Connack) {
-			conn.Store(true)
+			connSt.Store(true)
+			code133.Store(false)
+			code142.Store(false)
 			if len(opt.Subscribe) > 0 {
 				x := make([]paho.SubscribeOptions, 0, len(opt.Subscribe))
 				for k, v := range opt.Subscribe {
@@ -264,21 +280,27 @@ func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte))
 			}
 		},
 		OnConnectError: func(err error) {
-			conn.Store(false)
+			connSt.Store(false)
+			if strings.Contains(err.Error(), "reason: 133") {
+				code133.Store(true)
+			}
 			opt.Logg.Error(opt.LogHeader + " connect error: " + err.Error())
 		},
 		ClientConfig: paho.ClientConfig{
 			ClientID: opt.ClientID, // toolbox.GetRandomString(19, true),
 			OnServerDisconnect: func(d *paho.Disconnect) {
-				conn.Store(false)
-				if d.ReasonCode == 142 { // client id 重复
-					d.Packet().Properties.AssignedClientID += time.Now().Format("_2006-01-02_15:04:05.000000") // "_" + toolbox.GetRandomString(19, true)
-					return
+				connSt.Store(false)
+				if d.ReasonCode == 142 {
+					code142.Store(true)
 				}
-				opt.Logg.Error(opt.LogHeader + " server may be down " + strconv.Itoa(int(d.ReasonCode)))
+				if d.Properties != nil {
+					opt.Logg.Error(opt.LogHeader + " server requested disconnect, reason code: " + strconv.Itoa(int(d.ReasonCode)) + " " + d.Properties.ReasonString)
+				} else {
+					opt.Logg.Error(opt.LogHeader + " server requested disconnect, reason code: " + strconv.Itoa(int(d.ReasonCode)))
+				}
 			},
 			OnClientError: func(err error) {
-				conn.Store(false)
+				connSt.Store(false)
 				opt.Logg.Error(opt.LogHeader + " client error: " + err.Error())
 			},
 			OnPublishReceived: []func(paho.PublishReceived) (bool, error){
@@ -303,7 +325,7 @@ func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte))
 
 	return &MqttClientV5{
 		client:      cm,
-		st:          conn,
+		st:          connSt,
 		cnf:         opt,
 		ctxCancel:   funClose,
 		failedCache: failedCache,

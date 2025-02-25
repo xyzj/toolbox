@@ -21,10 +21,12 @@ var (
 
 func TestMQ5(t *testing.T) {
 	opt := &MqttOpt{
-		Addr:     "mqtt://36.153.242.90:17002",
-		Username: "SH50_DEV",
-		Passwd:   "dasfs@8124545",
-		ClientID: "123122334",
+		Addr:     "tls://192.168.50.83:1881",
+		Username: "arx7",
+		Passwd:   "arbalest",
+		// Username: "SH50_DEV",
+		// Passwd:   "dasfs@8124545",
+		ClientID: "123122334e234d",
 		Subscribe: map[string]byte{
 			"133/#":       1,
 			"123df/3/#":   1,
@@ -33,31 +35,33 @@ func TestMQ5(t *testing.T) {
 		},
 		Logg: logger.NewConsoleLogger(),
 	}
+	v3, _ = NewMQTTClientV5(opt, func(topic string, body []byte) {
+		println("v3 recv:", topic)
+	})
 	opt5 := &MqttOpt{
-		Addr: "mqtt://36.153.242.90:17002",
+		Addr: "tls://192.168.50.83:1881",
 		Subscribe: map[string]byte{
 			"#":         1,
 			"133/#":     1,
 			"123df/3/#": 1,
 		},
-		Username: "SH50_DEV",
-		Passwd:   "dasfs@8124545",
+		Username: "arx7",
+		Passwd:   "arbalest",
+		// Username: "SH50_DEV",
+		// Passwd:   "dasfs@8124545",
 		ClientID: "123122334e234d",
 		Logg:     logger.NewConsoleLogger(),
 	}
-	v3, _ = NewMQTTClientV5(opt, func(topic string, body []byte) {
-		println("v3 recv:", topic)
-	})
 	v5, _ = NewMQTTClientV5(opt5, func(topic string, body []byte) {
 		println("v5 recv:", topic)
 	})
 
 	for {
-		err := v3.Write("123/12321", []byte("123123"))
+		err := v5.Write("123/12321", []byte("123123"))
 		if err != nil {
 			println(err.Error())
 		}
-		time.Sleep(time.Second * 3)
+		time.Sleep(time.Second * 10)
 		// err = v5.Write("23842/2382", []byte("189273gksdhfksf"))
 		// if err != nil {
 		// 	t.Fatal(err)
