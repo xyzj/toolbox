@@ -177,7 +177,7 @@ func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte))
 		opt.SendTimeo = time.Second * 5
 	}
 	if opt.ClientID == "" {
-		opt.ClientID = toolbox.GetRandomString(7, true)
+		opt.ClientID = toolbox.GetRandomString(9, true)
 	}
 	if opt.LogHeader == "" {
 		opt.LogHeader = "[MQTT]"

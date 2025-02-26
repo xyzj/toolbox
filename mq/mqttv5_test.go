@@ -28,7 +28,7 @@ func TestMQ5(t *testing.T) {
 		Passwd:    "arbalest",
 		// Username: "SH50_DEV",
 		// Passwd:   "dasfs@8124545",
-		ClientID: "123122334e234d",
+		// ClientID: "123122334e234d",
 		Subscribe: map[string]byte{
 			"22/#":        1,
 			"123df/3/#":   1,
@@ -53,8 +53,8 @@ func TestMQ5(t *testing.T) {
 		Passwd:   "test0307",
 		// Username: "SH50_DEV",
 		// Passwd:   "dasfs@8124545",
-		ClientID: "123122334e234d",
-		Logg:     logger.NewConsoleLogger(),
+		// ClientID: "123122334e234d",
+		Logg: logger.NewConsoleLogger(),
 	}
 	v5, _ = NewMQTTClientV5(opt5, func(topic string, body []byte) {
 		println("v5 recv:", topic)
