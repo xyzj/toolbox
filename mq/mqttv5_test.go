@@ -21,14 +21,16 @@ var (
 
 func TestMQ5(t *testing.T) {
 	opt := &MqttOpt{
-		Addr:     "tls://192.168.50.83:1881",
-		Username: "arx7",
-		Passwd:   "arbalest",
+		Addr: "mqtt://10.3.8.34:1883",
+		// Addr:     "tls://192.168.50.83:1881",
+		LogHeader: "one",
+		Username:  "arx7",
+		Passwd:    "arbalest",
 		// Username: "SH50_DEV",
 		// Passwd:   "dasfs@8124545",
 		ClientID: "123122334e234d",
 		Subscribe: map[string]byte{
-			"133/#":       1,
+			"22/#":        1,
 			"123df/3/#":   1,
 			"13323/#":     1,
 			"123d32f/3/#": 1,
@@ -39,14 +41,16 @@ func TestMQ5(t *testing.T) {
 		println("v3 recv:", topic)
 	})
 	opt5 := &MqttOpt{
-		Addr: "tls://192.168.50.83:1881",
+		Addr: "mqtt://10.3.8.34:1883",
+		// Addr: "tls://192.168.50.83:1881",
+		LogHeader: "two",
 		Subscribe: map[string]byte{
-			"#":         1,
+			"22/#":      1,
 			"133/#":     1,
 			"123df/3/#": 1,
 		},
-		Username: "arx7",
-		Passwd:   "arbalest",
+		Username: "mqtest",
+		Passwd:   "test0307",
 		// Username: "SH50_DEV",
 		// Passwd:   "dasfs@8124545",
 		ClientID: "123122334e234d",

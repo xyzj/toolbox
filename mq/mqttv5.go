@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"math/rand"
 	"net/url"
 	"strconv"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/eclipse/paho.golang/autopaho"
 	"github.com/eclipse/paho.golang/paho"
+	"github.com/xyzj/toolbox"
 	"github.com/xyzj/toolbox/cache"
 	"github.com/xyzj/toolbox/logger"
 )
@@ -174,13 +176,15 @@ func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte))
 	if opt.SendTimeo == 0 {
 		opt.SendTimeo = time.Second * 5
 	}
+	if opt.ClientID == "" {
+		opt.ClientID = toolbox.GetRandomString(7, true)
+	}
 	if opt.LogHeader == "" {
 		opt.LogHeader = "[MQTT]"
 	}
 	if opt.TLSConf == nil {
 		opt.TLSConf = &tls.Config{InsecureSkipVerify: true}
 	}
-
 	if recvCallback == nil {
 		recvCallback = func(topic string, body []byte) {}
 	}
@@ -229,8 +233,9 @@ func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte))
 			return time.Second * time.Duration(rand.Int31n(30)+30)
 		},
 		ConnectPacketBuilder: func(c *paho.Connect, u *url.URL) (*paho.Connect, error) {
+			c.CleanStart = true
 			if code142.Load() || code133.Load() {
-				c.ClientID = time.Now().Format("2006-01-02T15:04:05Z")
+				c.ClientID = opt.ClientID + "_" + toolbox.GetRandomString(9, true)
 			}
 			return c, nil
 		},
@@ -281,16 +286,16 @@ func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte))
 		},
 		OnConnectError: func(err error) {
 			connSt.Store(false)
-			if strings.Contains(err.Error(), "reason: 133") {
+			if strings.Contains(err.Error(), "reason: 133") { // exmq, need rename client id
 				code133.Store(true)
 			}
 			opt.Logg.Error(opt.LogHeader + " connect error: " + err.Error())
 		},
 		ClientConfig: paho.ClientConfig{
-			ClientID: opt.ClientID, // toolbox.GetRandomString(19, true),
+			ClientID: opt.ClientID,
 			OnServerDisconnect: func(d *paho.Disconnect) {
 				connSt.Store(false)
-				if d.ReasonCode == 142 {
+				if d.ReasonCode == 142 { // need rename client id
 					code142.Store(true)
 				}
 				if d.Properties != nil {
@@ -301,6 +306,9 @@ func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte))
 			},
 			OnClientError: func(err error) {
 				connSt.Store(false)
+				if err == io.EOF {
+					code142.Store(true)
+				}
 				opt.Logg.Error(opt.LogHeader + " client error: " + err.Error())
 			},
 			OnPublishReceived: []func(paho.PublishReceived) (bool, error){

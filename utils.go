@@ -54,6 +54,10 @@ var (
 	DefaultCacheDir = filepath.Join(pathtool.GetExecDir(), "..", "cache")
 	// DefaultConfDir 默认配置文件夹
 	DefaultConfDir = filepath.Join(pathtool.GetExecDir(), "..", "conf")
+	// ascii可打印字符
+	asciiPrintableChars = []byte("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!#$%&()*+,-./:;<=>?@[]^_`{|}~")
+	// ascii字符和数字
+	asciiCharsAndNumbers = []byte("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 )
 
 // Base64URLDecode url解码
@@ -448,14 +452,14 @@ func CalculateSecurityCode(t, salt string, offset int) []string {
 
 // GetRandomString 生成随机字符串
 func GetRandomString(l int64, letteronly ...bool) string {
-	str := "!#%&()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{|}"
+	bb := asciiPrintableChars
 	if len(letteronly) > 0 && letteronly[0] {
-		str = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+		bb = asciiCharsAndNumbers
 	}
-	bb := json.Bytes(str)
+	lbb := len(bb)
 	var rs strings.Builder
 	for i := int64(0); i < l; i++ {
-		rs.WriteByte(bb[rand.Intn(len(bb))])
+		rs.WriteByte(bb[rand.Intn(lbb)])
 	}
 	return rs.String()
 }
