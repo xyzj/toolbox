@@ -117,6 +117,7 @@ func (c *Chat) Print() *llms.ChatData {
 		Model:      c.opt.Model,
 		ServerAddr: c.opt.ServerAddr,
 		MaxContext: c.opt.MaxContent,
+		LastUpdate: time.Now().Unix(),
 	}
 }
 

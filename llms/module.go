@@ -34,13 +34,18 @@ type ChatData struct {
 	ServerAddr string     `json:"uri"`
 	Model      string     `json:"model"`
 	ID         string     `json:"id"`
+	LastUpdate int64      `json:"last_update"`
 	MaxContext int        `json:"max_context"`
 	ChatType   ChatType   `json:"chat_type"`
 }
 
-func (cd *ChatData) Marshal() []byte {
-	s, _ := json.Marshal(cd)
+func (cd *ChatData) ToJSON() string {
+	s, _ := json.MarshalToString(cd)
 	return s
+}
+
+func (cd *ChatData) FromJSON(s string) error {
+	return json.UnmarshalFromString(s, cd)
 }
 
 type ChatType byte

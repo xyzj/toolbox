@@ -1,6 +1,8 @@
 package llms
 
 import (
+	"time"
+
 	"github.com/xyzj/toolbox/httpclient"
 )
 
@@ -14,7 +16,7 @@ type Chat interface {
 
 type Storage interface {
 	Init() error
-	Export(map[string]*ChatData) error
+	Clear(time.Duration)
 	Import() (map[string]*ChatData, error)
 	Update(*ChatData) error
 }
