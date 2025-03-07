@@ -89,3 +89,7 @@ func NewConsoleLogger() Logger {
 		},
 	}
 }
+
+func NewNilLogger() Logger {
+	return &NilLogger{}
+}

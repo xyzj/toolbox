@@ -3,9 +3,24 @@ package toolbox
 import (
 	"fmt"
 	"net"
+	"net/http"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/xyzj/toolbox/httpclient"
 )
+
+var httpClient = httpclient.New()
+
+func DoStreamRequest(req *http.Request, header func(map[string]string), recv func([]byte) error, opts ...httpclient.ReqOpts) error {
+	return httpClient.DoStreamRequest(req, header, recv, opts...)
+}
+
+// DoRequestWithTimeout 发起请求
+func DoRequestWithTimeout(req *http.Request, timeo time.Duration) (int, []byte, map[string]string, error) {
+	return httpClient.DoRequest(req, httpclient.OptTimeout(timeo))
+}
 
 // IPUint2String change ip int64 data to string format
 func IPUint2String(ipnr uint) string {

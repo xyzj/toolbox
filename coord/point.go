@@ -75,11 +75,11 @@ func Geo2Text(gp []*Point) string {
 	switch len(gp) {
 	case 0: // 没有位置
 	case 1: // 点
-		geostr = fmt.Sprintf("POINT(%f %f)", gp[0].Lng, gp[0].Lat)
+		geostr = gp[0].GeoText()
 	default: // 线或者面
 		pts := make([]string, len(gp))
 		for k, v := range gp {
-			pts[k] = fmt.Sprintf("%f %f", v.Lng, v.Lat)
+			pts[k] = v.String() // fmt.Sprintf("%f %f", v.Lng, v.Lat)
 		}
 		if pts[0] == pts[len(gp)-1] { // 前后2点一致，表示面
 			geostr = fmt.Sprintf("POLYGON((%s))", strings.Join(pts, ","))

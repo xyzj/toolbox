@@ -1,8 +1,8 @@
 package mapfx
 
 import (
-	"fmt"
 	"reflect"
+	"slices"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -175,7 +175,6 @@ func (u *UniqueSlice[T]) ForEach(f func(value T) bool) (err error) {
 	defer func() {
 		if ex := recover(); ex != nil {
 			err = errors.WithStack(ex.(error))
-			println(fmt.Sprintf("map foreach error :%+v", errors.WithStack(err)))
 		}
 	}()
 	for _, v := range x {
@@ -197,7 +196,7 @@ func (u *UniqueSlice[T]) Delete(item T) {
 	u.locker.RLock()
 	defer u.locker.RUnlock()
 	if idx, ok := u.has(item); ok {
-		u.data = append(u.data[:idx], u.data[idx+1:]...)
+		u.data = slices.Delete(u.data, idx, idx+1)
 	}
 }
 

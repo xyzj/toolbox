@@ -40,7 +40,7 @@ func String2Bytes(data string, sep string) []byte {
 	return z
 }
 
-func TestSM2(t *testing.T) {
+func TestSma2(t *testing.T) {
 	// ss := SplitStringWithLen(prikey, 2)
 	// xss := strings.Join(ss, "-")
 	// bb := String2Bytes(xss, "-")
@@ -99,5 +99,26 @@ func TestSM4(t *testing.T) {
 	}
 	if s1 != sss {
 		t.Fail()
+	}
+}
+
+func BenchmarkSM2(b *testing.B) {
+	c := NewSM2()
+	c.GenerateKey()
+	// c.SetPublicKeyFromFile("publicKey.pem")
+	// c.SetPrivateKeyFromFile("privateKey.pem")
+	sss := `{"deviceCode":"2","kIndexes":[{"loopIndex":"K1","ctlTimes":[{"date":"2025-01-16","times":[{"period":1,"startTime":"2025-01-16 17:44","endTime":"2025-01-17 07:03"}]},{"date":"2025-01-17","times":[{"period":1,"startTime":"2025-01-17 17:44","endTime":"2025-01-18 07:03"}]}]},{"loopIndex":"K2","ctlTimes":[{"date":"2025-01-16","times":[{"period":1,"startTime":"2025-01-16 17:44","endTime":"2025-01-17 07:03"}]},{"date":"2025-01-17","times":[{"period":1,"startTime":"2025-01-17 17:44","endTime":"2025-01-18 07:03"}]}]},{"loopIndex":"K3","ctlTimes":[{"date":"2025-01-16","times":[{"period":1,"startTime":"2025-01-16 17:44","endTime":"2025-01-17 07:03"}]},{"date":"2025-01-17","times":[{"period":1,"startTime":"2025-01-17 17:44","endTime":"2025-01-18 07:03"}]},{"loopIndex":"K4","ctlTimes":[{"date":"2025-01-16","times":[{"period":1,"startTime":"2025-01-16 17:44","endTime":"2025-01-17 07:03"}]},{"date":"2025-01-17","times":[{"period":1,"startTime":"2025-01-17 17:44","endTime":"2025-01-18 07:03"}]}]},{"loopIndex":"K5","ctlTimes":[{"date":"2025-01-16","times":[{"period":1,"startTime":"2025-01-16 17:44","endTime":"2025-01-17 07:03"}]},{"date":"2025-01-17","times":[{"period":1,"startTime":"2025-01-17 17:44","endTime":"2025-01-18 07:03"}]}]},{"loopIndex":"K6","ctlTimes":[{"date":"2025-01-16","times":[{"period":1,"startTime":"2025-01-16 17:44","endTime":"2025-01-17 07:03"}]},{"date":"2025-01-17","times":[{"period":1,"startTime":"2025-01-17 17:44","endTime":"2025-01-18 07:03"}]}]},{"loopIndex":"K7","ctlTimes":[{"date":"2025-01-16","times":[{"period":1,"startTime":"2025-01-16 17:44","endTime":"2025-01-17 07:03"}]},{"date":"2025-01-17","times":[{"period":1,"startTime":"2025-01-17 17:44","endTime":"2025-01-18 07:03"}]}]},{"loopIndex":"K8","ctlTimes":[{"date":"2025-01-16","times":[{"period":1,"startTime":"2025-01-16 17:44","endTime":"2025-01-17 07:03"}]},{"date":"2025-01-17","times":[{"period":1,"startTime":"2025-01-17 17:44","endTime":"2025-01-18 07:03"}]}]}]}]}` // toolbox.GetRandomString(30002, true) // "1267312shfskdfadfaf"
+	bb := []byte(sss)
+	var err error
+	var x CValue
+	// var xs string
+	x, _ = c.Encode(bb)
+	bbb := x.Bytes()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err = c.Decode(bbb)
+		if err != nil {
+			b.Fatal(err.Error())
+		}
 	}
 }

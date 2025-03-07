@@ -23,15 +23,15 @@ func TestMQ5(t *testing.T) {
 	opt := &MqttOpt{
 		Addr: "mqtt://10.3.8.34:1883",
 		// Addr:     "tls://192.168.50.83:1881",
-		LogHeader: "one",
-		Username:  "arx7",
-		Passwd:    "arbalest",
+		LogHeader: "user01",
+		Username:  "user01",
+		Passwd:    "concord",
 		// Username: "SH50_DEV",
 		// Passwd:   "dasfs@8124545",
 		// ClientID: "123122334e234d",
 		Subscribe: map[string]byte{
-			"22/#":        1,
-			"123df/3/#":   1,
+			"up/#":        1,
+			"down/#":      1,
 			"13323/#":     1,
 			"123d32f/3/#": 1,
 		},
@@ -45,12 +45,12 @@ func TestMQ5(t *testing.T) {
 		// Addr: "tls://192.168.50.83:1881",
 		LogHeader: "two",
 		Subscribe: map[string]byte{
-			"22/#":      1,
-			"133/#":     1,
-			"123df/3/#": 1,
+			"#":       1,
+			"down1/#": 1,
+			"up1/#":   1,
 		},
-		Username: "mqtest",
-		Passwd:   "test0307",
+		Username: "control",
+		Passwd:   "daysgone",
 		// Username: "SH50_DEV",
 		// Passwd:   "dasfs@8124545",
 		// ClientID: "123122334e234d",
@@ -61,7 +61,7 @@ func TestMQ5(t *testing.T) {
 	})
 
 	for {
-		err := v5.Write("123/12321", []byte("123123"))
+		err := v5.Write("down/aaa/user01/123", []byte("123123"))
 		if err != nil {
 			println(err.Error())
 		}
