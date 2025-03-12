@@ -142,27 +142,40 @@ func (c *Client) DoStreamRequest(req *http.Request, header func(map[string]strin
 		header(h)
 	}
 	if recv != nil {
-		buf := bufio.NewReader(resp.Body)
-		b := make([]byte, 65536)
-		for {
-			n, err := buf.Read(b)
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				c.logg.Error("Read response body error:" + err.Error())
-				return err
-			}
-			if err = recv(b[:n]); err != nil {
+		// buf := bufio.NewReader(resp.Body)
+		// b := make([]byte, 65536)
+		var bb []byte
+		// var n int
+		// var err error
+		// for {
+		// 	if c.opt.readBytes == 0 {
+		// 		n, err = buf.Read(b)
+		// 		if n > 0 {
+		// 			bb = b[:n]
+		// 		}
+		// 	} else {
+		// 		bb, err = buf.ReadBytes(c.opt.readBytes)
+		// 		bb = append(bb, c.opt.readBytes)
+		// 	}
+		// 	if err == io.EOF {
+		// 		break
+		// 	}
+		// 	if err != nil {
+		// 		c.logg.Error("Read response body error:" + err.Error())
+		// 		return err
+		// 	}
+		// 	if err = recv(bb); err != nil {
+		// 		return err
+		// 	}
+		// }
+		buf := bufio.NewScanner(resp.Body)
+		for buf.Scan() {
+			bb = buf.Bytes()
+			bb = append(bb, '\n')
+			if err = recv(bb); err != nil {
 				return err
 			}
 		}
-		// buf:=bufio.NewScanner(resp.Body)
-		// for buf.Scan() {
-		// 	if !recv(buf.Bytes()) {
-		// 		break
-		// 	}
-		// }
 	}
 	return nil
 }

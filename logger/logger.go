@@ -2,6 +2,8 @@ package logger
 
 import (
 	"io"
+
+	"github.com/xyzj/toolbox/json"
 )
 
 type LogLevel byte
@@ -49,8 +51,48 @@ func (l *NilLogger) DefaultWriter() io.Writer { return nil }
 
 // StdLogger mx log
 type StdLogger struct {
-	Out      io.Writer
-	LogLevel LogLevel
+	out      io.Writer
+	logLevel LogLevel
+}
+
+// Debug Debug
+func (l *StdLogger) Debug(msg string) {
+	if LogDebug >= l.logLevel {
+		l.out.Write(json.Bytes(msg))
+	}
+}
+
+// Info Info
+func (l *StdLogger) Info(msg string) {
+	if LogInfo >= l.logLevel {
+		l.out.Write(json.Bytes(msg))
+	}
+}
+
+// Warning Warning
+func (l *StdLogger) Warning(msg string) {
+	if LogWarning >= l.logLevel {
+		l.out.Write(json.Bytes(msg))
+	}
+}
+
+// Error Error
+func (l *StdLogger) Error(msg string) {
+	if LogError >= l.logLevel {
+		l.out.Write(json.Bytes(msg))
+	}
+}
+
+// System System
+func (l *StdLogger) System(msg string) {
+	if LogSystem >= l.logLevel {
+		l.out.Write(json.Bytes(msg))
+	}
+}
+
+// DefaultWriter 返回日志Writer
+func (l *StdLogger) DefaultWriter() io.Writer {
+	return l.out
 }
 
 // NewLogger init logger
@@ -64,30 +106,35 @@ type StdLogger struct {
 // logDays 日志文件保留天数
 //
 // delayWrite 是否延迟写入，在日志密集时，可减少磁盘io，但可能导致日志丢失
-func NewLogger(opt *OptLog) Logger {
-	if opt.Filename == "" {
-		return NewConsoleLogger()
+func NewLogger(l LogLevel, opts ...Opts) Logger {
+	return &StdLogger{
+		out:      NewWriter(opts...),
+		logLevel: l,
 	}
-	return &MultiLogger{
-		outs: []*StdLogger{
-			{
-				LogLevel: opt.LogLevel,
-				Out:      NewWriter(opt),
-			},
-		},
-	}
+	// return &MultiLogger{
+	// 	outs: []*StdLogger{
+	// 		{
+	// 			logLevel: opt.LogLevel,
+	// 			out:      NewWriter(opt),
+	// 		},
+	// 	},
+	// }
 }
 
 // NewConsoleLogger 返回一个纯控制台日志输出器
 func NewConsoleLogger() Logger {
-	return &MultiLogger{
-		outs: []*StdLogger{
-			{
-				LogLevel: LogDebug,
-				Out:      NewConsoleWriter(),
-			},
-		},
+	return &StdLogger{
+		out:      NewConsoleWriter(),
+		logLevel: LogDebug,
 	}
+	// return &MultiLogger{
+	// 	outs: []*StdLogger{
+	// 		{
+	// 			logLevel: LogDebug,
+	// 			out:      NewConsoleWriter(),
+	// 		},
+	// 	},
+	// }
 }
 
 func NewNilLogger() Logger {

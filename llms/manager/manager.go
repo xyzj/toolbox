@@ -9,6 +9,7 @@ import (
 	"github.com/xyzj/toolbox/llms"
 	"github.com/xyzj/toolbox/llms/ollama"
 	"github.com/xyzj/toolbox/llms/storage"
+	"github.com/xyzj/toolbox/llms/volcengine"
 	"github.com/xyzj/toolbox/logger"
 )
 
@@ -54,7 +55,7 @@ func (m *ChatManager) Chat(id, message string, f func([]byte) error, opts ...htt
 	if !ok {
 		return errors.New("chat not found")
 	}
-	err := chat.Chat(message, f, opts...)
+	err := chat.Chat(message, f)
 	if err != nil {
 		m.opt.logg.Error("Request chat error: " + err.Error())
 		return errors.New("Request chat error: " + err.Error())
@@ -79,7 +80,7 @@ func (m *ChatManager) Stop(id string) error {
 }
 
 func (m *ChatManager) Load() {
-	m.data.Clear(m.opt.chatLifeTime)
+	m.data.RemoveDead(m.opt.chatLifeTime)
 	chats, err := m.data.Import()
 	if err != nil {
 		m.opt.logg.Error("Import storage error: " + err.Error())
@@ -89,6 +90,10 @@ func (m *ChatManager) Load() {
 		switch chat.ChatType {
 		case llms.Ollama:
 			c := &ollama.Chat{}
+			c.Restore(chat)
+			m.chats.Store(id, c)
+		case llms.VolcEngine:
+			c := &volcengine.Chat{}
 			c.Restore(chat)
 			m.chats.Store(id, c)
 		}

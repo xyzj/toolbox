@@ -41,7 +41,7 @@ func (s *FileStorage) Init() error {
 	return nil
 }
 
-func (s *FileStorage) Clear(d time.Duration) {
+func (s *FileStorage) RemoveDead(d time.Duration) {
 	s.db.ForEach(func(k, v string) error {
 		u := gjson.Parse(v).Get("last_update").Int()
 		if time.Now().Unix()-u > int64(d.Seconds()) {

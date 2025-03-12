@@ -2,13 +2,11 @@ package llms
 
 import (
 	"time"
-
-	"github.com/xyzj/toolbox/httpclient"
 )
 
 type Chat interface {
 	ID() string
-	Chat(string, func([]byte) error, ...httpclient.ReqOpts) error
+	Chat(string, func([]byte) error) error
 	Stop()
 	Print() *ChatData
 	Restore(*ChatData)
@@ -16,7 +14,7 @@ type Chat interface {
 
 type Storage interface {
 	Init() error
-	Clear(time.Duration)
+	RemoveDead(time.Duration)
 	Import() (map[string]*ChatData, error)
 	Update(*ChatData) error
 }

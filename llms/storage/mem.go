@@ -16,7 +16,7 @@ func (s *MemStorage) Init() error {
 	return nil
 }
 
-func (s *MemStorage) Clear(time.Duration) {
+func (s *MemStorage) RemoveDead(time.Duration) {
 	return
 }
 

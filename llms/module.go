@@ -20,20 +20,13 @@ type Message struct {
 	Content string `json:"content"`
 }
 
-type ChatResponse struct {
-	Message    *Message `json:"message,omitempty"`
-	Model      string   `json:"model"`
-	CreatedAt  string   `json:"created_at"`
-	Response   string   `json:"response,omitempty"` // 非流式响应时，回复内容在此字段
-	DoneReason string   `json:"done_reason"`
-	Done       bool     `json:"done"`
-}
-
 type ChatData struct {
 	Messages   []*Message `json:"history"`
 	ServerAddr string     `json:"uri"`
 	Model      string     `json:"model"`
 	ID         string     `json:"id"`
+	ApiKey     string     `json:"api_key"`
+	Timeout    int64      `json:"timeout"`
 	LastUpdate int64      `json:"last_update"`
 	MaxContext int        `json:"max_context"`
 	ChatType   ChatType   `json:"chat_type"`
@@ -52,4 +45,5 @@ type ChatType byte
 
 const (
 	Ollama ChatType = iota
+	VolcEngine
 )

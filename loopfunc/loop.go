@@ -24,7 +24,7 @@ type CrashLogger struct {
 }
 
 func (m *CrashLogger) Write(p []byte) (n int, err error) {
-	m.fn, err = os.OpenFile(m.FilePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0664)
+	m.fn, err = os.OpenFile(m.FilePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o664)
 	if err != nil {
 		return 0, err
 	}
@@ -43,7 +43,7 @@ func (m *CrashLogger) Write(p []byte) (n int, err error) {
 // logWriter：方法崩溃时的日志记录器，默认os.stdout
 //
 // params： 需要传给f的参数，f内需要进行类型转换
-func LoopFunc(f func(params ...interface{}), name string, logWriter io.Writer, params ...interface{}) {
+func LoopFunc(f func(params ...any), name string, logWriter io.Writer, params ...any) {
 	loopAndRetry(f, name, logWriter, time.Second*20, 0, params...)
 }
 
@@ -56,7 +56,7 @@ func LoopFunc(f func(params ...interface{}), name string, logWriter io.Writer, p
 // logWriter：方法崩溃时的日志记录器，默认os.stdout
 //
 // params： 需要传给f的参数，f内需要进行类型转换
-func LoopWithWait(f func(params ...interface{}), name string, logWriter io.Writer, timewait time.Duration, params ...interface{}) {
+func LoopWithWait(f func(params ...any), name string, logWriter io.Writer, timewait time.Duration, params ...any) {
 	loopAndRetry(f, name, logWriter, timewait, 0, params...)
 }
 
@@ -71,11 +71,11 @@ func LoopWithWait(f func(params ...interface{}), name string, logWriter io.Write
 // retry：panic最大次数
 //
 // params： 需要传给f的参数，f内需要进行类型转换
-func LoopWithRetry(f func(params ...interface{}), name string, logWriter io.Writer, timewait time.Duration, retry int, params ...interface{}) {
+func LoopWithRetry(f func(params ...any), name string, logWriter io.Writer, timewait time.Duration, retry int, params ...any) {
 	loopAndRetry(f, name, logWriter, timewait, retry, params...)
 }
 
-func loopAndRetry(f func(params ...interface{}), name string, logWriter io.Writer, timewait time.Duration, retry int, params ...interface{}) {
+func loopAndRetry(f func(params ...any), name string, logWriter io.Writer, timewait time.Duration, retry int, params ...any) {
 	locker := &sync.WaitGroup{}
 	end := false
 	if logWriter == nil {
@@ -132,7 +132,7 @@ RUN:
 // logWriter：方法崩溃时的日志记录器，默认os.stdout
 //
 // params： 需要传给f的参数，f内需要进行类型转换
-func GoFunc(f func(params ...interface{}), name string, logWriter io.Writer, params ...interface{}) {
+func GoFunc(f func(params ...any), name string, logWriter io.Writer, params ...any) {
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {

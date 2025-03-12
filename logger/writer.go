@@ -31,55 +31,30 @@ var (
 	comp    = crypto.NewCompressor(crypto.CompressZstd)
 )
 
-// OptLog OptLog
-type OptLog struct {
-	// Filename 日志文件名，不需要扩展名，会自动追加时间戳以及.log扩展名，为空时其他参数无效，仅输出到控制台
-	Filename string
-	// FileDir 日志存放目录
-	FileDir string
-	// FileSize 单个日志文件最大大小，AutoRoll==true时有效
-	FileSize int64
-	// FileDays 日志最大保留天数，AutoRoll==true时有效
-	FileDays int
-	// AutoRoll 是否自动滚动日志文件，true-依据FileDays和FileSize自动切分日志文件，日志文件名会额外追加日期时间戳‘yymmdd’和序号
-	AutoRoll bool
-	// CompressFile 是否压缩旧日志文件，AutoRoll==true时有效
-	CompressFile bool
-	// DelayWrite 延迟写入，每秒检查写入缓存，并写入文件，非实时写入
-	DelayWrite bool
-	// LogLevel 日志等级
-	LogLevel LogLevel
-}
-
-func (o *OptLog) ensureDefaults() {
-	if o.FileDays == 0 && o.FileSize == 0 {
-		o.AutoRoll = false
-	} else {
-		o.AutoRoll = true
-	}
-	if o.FileSize < maxFileSize {
-		o.FileSize = maxFileSize
-	}
-}
-
 func NewConsoleWriter() io.Writer {
 	return &Writer{
 		timeFormat: LongTimeFormat,
-		out:        os.Stdout,
+		fno:        os.Stdout,
+		// out:        os.Stdout,
 	}
 }
 
 // NewWriter 一个新的log写入器
 //
 // opt: 日志写入器配置
-func NewWriter(opt *OptLog) io.Writer {
-	if opt == nil || opt.Filename == "" {
+func NewWriter(opts ...Opts) io.Writer {
+	opt := &Opt{
+		FileDir: pathtool.GetExecDir(),
+	}
+	for _, o := range opts {
+		o(opt)
+	}
+	if opt.Filename == "" {
 		return NewConsoleWriter()
 	}
-	opt.ensureDefaults()
 	t := time.Now()
 	mylog := &Writer{
-		out:          os.Stdout,
+		// out:          os.Stdout,
 		expired:      int64(opt.FileDays)*24*60*60 - 10,
 		fileFileSize: opt.FileSize,
 		fname:        opt.Filename,
@@ -87,11 +62,11 @@ func NewWriter(opt *OptLog) io.Writer {
 		fileDay:      t.Day(),
 		fileHour:     t.Hour(),
 		logDir:       opt.FileDir,
-		chanGoWrite:  make(chan []byte, 2000),
-		enablegz:     opt.CompressFile,
-		withFile:     opt.Filename != "",
-		delayWrite:   opt.DelayWrite,
-		timeFormat:   LongTimeFormat,
+		// chanGoWrite:  make(chan []byte, 2000),
+		enablegz: opt.CompressFile,
+		withFile: opt.Filename != "",
+		// delayWrite:   opt.DelayWrite,
+		timeFormat: LongTimeFormat,
 	}
 	if opt.AutoRoll {
 		mylog.timeFormat = ShortTimeFormat
@@ -118,8 +93,8 @@ func NewWriter(opt *OptLog) io.Writer {
 
 // Writer 自定义Writer
 type Writer struct {
-	chanGoWrite  chan []byte
-	out          io.Writer
+	// chanGoWrite chan []byte
+	// out          io.Writer
 	fno          *os.File
 	pathNow      string
 	fname        string
@@ -135,7 +110,7 @@ type Writer struct {
 	enablegz     bool
 	rollfile     bool
 	withFile     bool
-	delayWrite   bool
+	// delayWrite   bool
 }
 
 // Write 异步写入日志，返回固定为 0, nil
@@ -145,15 +120,16 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 	if !bytes.HasSuffix(xp, lineEnd) {
 		xp = append(xp, lineEnd...)
 	}
-	if w.withFile {
-		if w.delayWrite {
-			w.chanGoWrite <- xp
-		} else {
-			w.fno.Write(xp)
-		}
-	} else {
-		w.out.Write(xp)
-	}
+	w.fno.Write(xp)
+	// if w.withFile {
+	// 	if w.delayWrite {
+	// 		w.chanGoWrite <- xp
+	// 	} else {
+	// 		w.fno.Write(xp)
+	// 	}
+	// } else {
+	// 	w.out.Write(xp)
+	// }
 	return 0, nil
 }
 
@@ -163,35 +139,40 @@ func (w *Writer) startWrite() {
 	}
 	go loopfunc.LoopFunc(func(params ...interface{}) {
 		tc := time.NewTicker(time.Minute * 10)
-		tw := time.NewTicker(time.Second)
-		buftick := &bytes.Buffer{}
-		if !w.delayWrite {
-			tw.Stop()
-		}
-		for {
-			select {
-			case p := <-w.chanGoWrite:
-				// if w.withFile {
-				// 	if w.delayWrite {
-				buftick.Write(p)
-				// } else {
-				// 	w.fno.Write(p)
-				// }
-				// }
-				// w.out.Write(buf.Bytes())
-			case <-tc.C:
-				if w.rollfile {
-					w.rollingFileNoLock()
-				}
-			case <-tw.C:
-				if w.withFile {
-					if buftick.Len() > 0 {
-						w.fno.Write(buftick.Bytes())
-						buftick.Reset()
-					}
-				}
+		// tw := time.NewTicker(time.Second)
+		// buftick := &bytes.Buffer{}
+		// if !w.delayWrite {
+		// 	tw.Stop()
+		// }
+		for range tc.C {
+			if w.rollfile {
+				w.rollingFileNoLock()
 			}
 		}
+		// for {
+		// 	select {
+		// 	case p := <-w.chanGoWrite:
+		// 		// if w.withFile {
+		// 		// 	if w.delayWrite {
+		// 		buftick.Write(p)
+		// 		// } else {
+		// 		// 	w.fno.Write(p)
+		// 		// }
+		// 		// }
+		// 		// w.out.Write(buf.Bytes())
+		// 	case <-tc.C:
+		// 		if w.rollfile {
+		// 			w.rollingFileNoLock()
+		// 		}
+		// 	case <-tw.C:
+		// 		if w.withFile {
+		// 			if buftick.Len() > 0 {
+		// 				w.fno.Write(buftick.Bytes())
+		// 				buftick.Reset()
+		// 			}
+		// 		}
+		// 	}
+		// }
 	}, "log writer", nil)
 }
 

@@ -29,9 +29,9 @@ const (
 	SM4CBC SM4Type = iota
 	// SM4CFB SM4 CFB算法
 	SM4CFB
-	// SM4OFB SM4 CBC算法
+	// SM4OFB SM4 OFB算法
 	SM4OFB
-	// SM4ECB SM4 CFB算法
+	// SM4ECB SM4 ECB算法
 	SM4ECB
 )
 

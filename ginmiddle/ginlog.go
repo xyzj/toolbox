@@ -108,14 +108,17 @@ func LogToWriter(w io.Writer, skippath ...string) gin.HandlerFunc {
 // filename：日志文件名。
 // maxdays：日志文件最大保存天数。
 func LoggerWithRolling(logdir, filename string, maxdays int, skippath ...string) gin.HandlerFunc {
-	lo := logger.NewWriter(&logger.OptLog{
-		AutoRoll:     true,
-		FileDir:      logdir,
-		Filename:     filename,
-		FileDays:     maxdays,
-		CompressFile: true,
-		DelayWrite:   true,
-	})
+	lo := logger.NewWriter(logger.OptCompressFile(true),
+		logger.OptFileDays(maxdays),
+		logger.OptFileDir(logdir),
+		logger.OptFilename(filename))
+	// lo := logger.NewWriter(&logger.OptLog{
+	// 	AutoRoll:     true,
+	// 	FileDir:      logdir,
+	// 	Filename:     filename,
+	// 	FileDays:     maxdays,
+	// 	CompressFile: true,
+	// })
 	return LogToWriter(lo, skippath...)
 	// return LoggerWithRollingSkip(logdir, filename, maxdays, []string{"/static"})
 	// }

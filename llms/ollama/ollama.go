@@ -18,10 +18,51 @@ import (
 
 var idHash = crypto.NewHash(crypto.HashSHA1, []byte{})
 
+type ChatResponse struct {
+	Message    *llms.Message `json:"message,omitempty"`
+	Model      string        `json:"model"`
+	CreatedAt  string        `json:"created_at"`
+	Response   string        `json:"response,omitempty"` // 非流式响应时，回复内容在此字段
+	DoneReason string        `json:"done_reason"`
+	Done       bool          `json:"done"`
+}
 type Opt struct {
-	ServerAddr string `json:"uri"`
-	Model      string `json:"model"`
-	MaxContent int
+	serverAddr string
+	model      string
+	timeout    time.Duration
+	maxContent int
+}
+
+type Opts func(opt *Opt)
+
+func OptServerAddr(s string) Opts {
+	return func(o *Opt) {
+		s = strings.TrimSuffix(s, "/")
+		if !strings.HasSuffix(s, "/api/chat") {
+			s += "/api/chat"
+		}
+		o.serverAddr = s
+	}
+}
+
+func OptModel(s string) Opts {
+	return func(o *Opt) {
+		if s != "" {
+			o.model = s
+		}
+	}
+}
+
+func OptMaxContent(n int) Opts {
+	return func(o *Opt) {
+		o.maxContent = min(max(n, 100), 1000)
+	}
+}
+
+func OptTimeout(t time.Duration) Opts {
+	return func(o *Opt) {
+		o.timeout = t
+	}
 }
 
 type Chat struct {
@@ -38,7 +79,7 @@ func (c *Chat) ID() string {
 	return c.id
 }
 
-func (c *Chat) Chat(message string, f func([]byte) error, opts ...httpclient.ReqOpts) error {
+func (c *Chat) Chat(message string, f func([]byte) error) error {
 	c.stop.Store(false)
 	c.locker.Lock()
 	defer c.locker.Unlock()
@@ -51,13 +92,13 @@ func (c *Chat) Chat(message string, f func([]byte) error, opts ...httpclient.Req
 	// 组装聊天数据
 	data := &llms.ChatRequest{
 		Messages: c.history.Slice(),
-		Model:    c.opt.Model,
+		Model:    c.opt.model,
 		Stream:   true, // 流式响应，设置为 false 获取非流式响应
 	}
-	req, _ := http.NewRequest("POST", c.opt.ServerAddr, bytes.NewReader(data.Marshal()))
-	buf := &bytes.Buffer{}
+	req, _ := http.NewRequest("POST", c.opt.serverAddr, bytes.NewReader(data.Marshal()))
+	c.buf.Reset()
 	var err error
-	r := &llms.ChatResponse{}
+	r := &ChatResponse{}
 	return c.client.DoStreamRequest(req, nil, func(b []byte) error {
 		if c.stop.Load() {
 			return errors.New("stop reading chat response")
@@ -70,7 +111,7 @@ func (c *Chat) Chat(message string, f func([]byte) error, opts ...httpclient.Req
 			return nil
 		}
 		if !r.Done {
-			buf.WriteString(r.Message.Content)
+			c.buf.WriteString(r.Message.Content)
 			if f != nil {
 				return f(json.Bytes(r.Message.Content))
 			}
@@ -78,10 +119,10 @@ func (c *Chat) Chat(message string, f func([]byte) error, opts ...httpclient.Req
 		}
 		c.history.Store(&llms.Message{
 			Role:    "assistant",
-			Content: buf.String(),
+			Content: c.buf.String(),
 		})
 		return nil
-	}, opts...)
+	}, httpclient.OptTimeout(c.opt.timeout))
 }
 
 func (c *Chat) Stop() {
@@ -95,9 +136,10 @@ func (c *Chat) SetID(id string) {
 func (c *Chat) Restore(d *llms.ChatData) {
 	c.id = d.ID
 	c.opt = &Opt{
-		ServerAddr: d.ServerAddr,
-		Model:      d.Model,
-		MaxContent: d.MaxContext,
+		serverAddr: d.ServerAddr,
+		model:      d.Model,
+		maxContent: d.MaxContext,
+		timeout:    time.Second * time.Duration(d.Timeout),
 	}
 	if c.history == nil {
 		c.history = history.NewChatHistory(d.MaxContext)
@@ -114,25 +156,24 @@ func (c *Chat) Print() *llms.ChatData {
 		ChatType:   llms.Ollama,
 		ID:         c.id,
 		Messages:   c.history.Slice(),
-		Model:      c.opt.Model,
-		ServerAddr: c.opt.ServerAddr,
-		MaxContext: c.opt.MaxContent,
+		Model:      c.opt.model,
+		ServerAddr: c.opt.serverAddr,
+		MaxContext: c.opt.maxContent,
 		LastUpdate: time.Now().Unix(),
+		Timeout:    int64(c.opt.timeout.Seconds()),
 	}
 }
 
-func NewChat(opt *Opt) *Chat {
-	if opt == nil {
-		opt = &Opt{}
+func NewChat(opts ...Opts) *Chat {
+	opt := &Opt{
+		serverAddr: "http://localhost:11434",
+		model:      "gemma2",
+		maxContent: 1000,
+		timeout:    time.Minute * 3,
 	}
-	if opt.ServerAddr == "" {
-		opt.ServerAddr = "http://localhost:11434"
+	for _, o := range opts {
+		o(opt)
 	}
-	opt.ServerAddr = strings.TrimSuffix(opt.ServerAddr, "/") + "/api/chat"
-	if opt.Model == "" {
-		opt.Model = "default"
-	}
-	opt.MaxContent = min(max(opt.MaxContent, 100), 1000)
 	return &Chat{
 		id:      idHash.Hash([]byte(time.Now().String())).HexString(),
 		client:  httpclient.New(),
@@ -140,6 +181,6 @@ func NewChat(opt *Opt) *Chat {
 		stop:    atomic.Bool{},
 		buf:     &bytes.Buffer{},
 		opt:     opt,
-		history: history.NewChatHistory(opt.MaxContent),
+		history: history.NewChatHistory(opt.maxContent),
 	}
 }
