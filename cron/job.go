@@ -198,10 +198,10 @@ func (c *Crontab) Resume(name string) error {
 	return errors.New("job " + name + " does not exist")
 }
 
-// Clean 清除所有任务
-func (c *Crontab) Clean() {
+// Clear 清除所有任务
+func (c *Crontab) Clear() {
 	c.cron.RemoveByTags(c.jobs.Keys()...)
-	c.jobs.Clean()
+	c.jobs.Clear()
 }
 
 // List 列出所有任务名称

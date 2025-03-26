@@ -6,7 +6,6 @@ import (
 	"github.com/tidwall/gjson"
 	"github.com/xyzj/toolbox/db"
 	"github.com/xyzj/toolbox/llms"
-	"github.com/xyzj/toolbox/loopfunc"
 )
 
 type FileStorage struct {
@@ -14,44 +13,36 @@ type FileStorage struct {
 	db *db.BoltDB
 }
 
-func NewFileStorage(filename string) llms.Storage {
-	return &FileStorage{
-		f: filename,
-	}
-}
-
-func (s *FileStorage) Init() error {
-	db, err := db.NewBolt(s.f)
+func NewFileStorage(filename string) (llms.Storage, error) {
+	d, err := db.NewBolt(filename)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	s.db = db
-	go loopfunc.LoopFunc(func(params ...interface{}) {
-		t := time.NewTicker(time.Hour)
-		for range t.C {
-			s.db.ForEach(func(k, v string) error {
-				u := gjson.Parse(v).Get("last_update").Int()
-				if time.Now().Unix()-u > 60*60*24*7 {
-					s.db.Delete(k)
-				}
-				return nil
-			})
-		}
-	}, "", nil)
-	return nil
+	// go func() {
+	// 	t := time.NewTicker(time.Minute)
+	// 	for range t.C {
+	// 		d.ForEach(func(k, v string) error {
+	// 			if time.Since(time.Unix(gjson.Get(v, "last_update").Int(), 0)) > lifetime {
+	// 				d.Delete(k)
+	// 			}
+	// 			return nil
+	// 		})
+	// 	}
+	// }()
+	return &FileStorage{
+		f:  filename,
+		db: d,
+	}, nil
 }
 
-func (s *FileStorage) RemoveDead(d time.Duration) {
+func (s *FileStorage) Clear() {
 	s.db.ForEach(func(k, v string) error {
-		u := gjson.Parse(v).Get("last_update").Int()
-		if time.Now().Unix()-u > int64(d.Seconds()) {
-			s.db.Delete(k)
-		}
+		s.db.Delete(k)
 		return nil
 	})
 }
 
-func (s *FileStorage) Import() (map[string]*llms.ChatData, error) {
+func (s *FileStorage) Load() (map[string]*llms.ChatData, error) {
 	data := make(map[string]*llms.ChatData)
 	var err error
 	s.db.ForEach(func(k, v string) error {
@@ -66,7 +57,15 @@ func (s *FileStorage) Import() (map[string]*llms.ChatData, error) {
 	return data, nil
 }
 
-func (s *FileStorage) Update(d *llms.ChatData) error {
-	s.db.Write(d.ID, d.ToJSON())
-	return nil
+func (s *FileStorage) Store(d *llms.ChatData) error {
+	return s.db.Write(d.ID, d.ToJSON())
+}
+
+func (s *FileStorage) RemoveDead(t time.Duration) {
+	s.db.ForEach(func(k, v string) error {
+		if time.Since(time.Unix(gjson.Get(v, "last_update").Int(), 0)) > t {
+			s.db.Delete(k)
+		}
+		return nil
+	})
 }

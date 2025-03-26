@@ -58,6 +58,19 @@ var (
 	sm3hash    = NewHash(HashSM3, nil)
 )
 
+type Cryptor interface {
+	GenerateKey(bits RSABits) (CValue, CValue, error)
+	SetPublicKeyFromFile(keyPath string) error
+	SetPublicKey(key string) error
+	SetPrivateKeyFromFile(keyPath string) error
+	SetPrivateKey(key string) error
+	Encode(b []byte) (CValue, error)
+	Decode(b []byte) (string, error)
+	DecodeBase64(s string) (string, error)
+	Decrypt(s string) string
+	Encrypt(s string) string
+	EncryptTo(s string) CValue
+}
 type CertOpt struct {
 	// 证书包含的域名清单
 	DNS []string `json:"dns"`

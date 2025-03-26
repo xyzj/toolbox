@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"math/big"
 	"net"
@@ -18,7 +19,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/xyzj/toolbox/json"
 	"github.com/xyzj/toolbox/pathtool"
 )
@@ -37,8 +37,8 @@ type ECC struct {
 	signHash *HASH
 	pubKey   *ecdsa.PublicKey
 	priKey   *ecdsa.PrivateKey
-	pubEcies *ecies.PublicKey
-	priEcies *ecies.PrivateKey
+	// pubEcies *ecies.PublicKey
+	// priEcies *ecies.PrivateKey
 	pubBytes CValue
 	priBytes CValue
 }
@@ -70,9 +70,9 @@ func (w *ECC) GenerateKey(ec ECShortName) (CValue, CValue, error) {
 	}
 	w.pubBytes = txt
 	w.pubKey = &p.PublicKey
-	w.pubEcies = ecies.ImportECDSAPublic(w.pubKey)
+	// w.pubEcies = ecies.ImportECDSAPublic(w.pubKey)
 	w.priKey = p
-	w.priEcies = ecies.ImportECDSA(p)
+	// w.priEcies = ecies.ImportECDSA(p)
 	return w.pubBytes, w.priBytes, nil
 }
 
@@ -124,7 +124,7 @@ func (w *ECC) SetPublicKey(key string) error {
 		return err
 	}
 	w.pubKey = pubKey.(*ecdsa.PublicKey)
-	w.pubEcies = ecies.ImportECDSAPublic(w.pubKey)
+	// w.pubEcies = ecies.ImportECDSAPublic(w.pubKey)
 	w.pubBytes = bb
 	return nil
 }
@@ -158,7 +158,7 @@ func (w *ECC) SetPrivateKey(key string) error {
 		}
 	}
 	w.priKey = priKey
-	w.priEcies = ecies.ImportECDSA(priKey)
+	// w.priEcies = ecies.ImportECDSA(priKey)
 	w.priBytes = bb
 
 	if len(w.pubBytes) == 0 {
@@ -169,33 +169,19 @@ func (w *ECC) SetPrivateKey(key string) error {
 		}
 		w.pubBytes = txt
 		w.pubKey = &priKey.PublicKey
-		w.pubEcies = ecies.ImportECDSAPublic(w.pubKey)
+		// w.pubEcies = ecies.ImportECDSAPublic(w.pubKey)
 	}
 	return nil
 }
 
 // Encode ecc加密
 func (w *ECC) Encode(b []byte) (CValue, error) {
-	if w.pubEcies == nil {
-		return EmptyValue, fmt.Errorf("no public key found")
-	}
-	res, err := ecies.Encrypt(rand.Reader, w.pubEcies, b, nil, nil)
-	if err != nil {
-		return EmptyValue, err
-	}
-	return CValue(res), nil
+	return EmptyValue, errors.New("not supported")
 }
 
 // Decode ecc解密
 func (w *ECC) Decode(b []byte) (string, error) {
-	if w.priEcies == nil {
-		return "", fmt.Errorf("no private key found")
-	}
-	c, err := w.priEcies.Decrypt(b, nil, nil)
-	if err != nil {
-		return "", err
-	}
-	return json.String(c), nil
+	return "", errors.New("not supported")
 }
 
 // DecodeBase64 从base64字符串解码

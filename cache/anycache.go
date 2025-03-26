@@ -113,19 +113,19 @@ func (ac *AnyCache[T]) Close() {
 	ac.closed.Store(true)
 	ac.cacheCleanup.Stop()
 	ac.closeChan <- true
-	ac.cache.Clean()
+	ac.cache.Clear()
 	ac.cache = nil
 }
 
-// Clean clears all the entries from the cache.
+// Clear clears all the entries from the cache.
 // If the cache is already closed, this function does nothing.
 //
 // This function is safe to call concurrently with other methods of the AnyCache.
-func (ac *AnyCache[T]) Clean() {
+func (ac *AnyCache[T]) Clear() {
 	if ac.closed.Load() {
 		return
 	}
-	ac.cache.Clean()
+	ac.cache.Clear()
 }
 
 // Len returns the number of entries in the cache.

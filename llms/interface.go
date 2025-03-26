@@ -1,8 +1,6 @@
 package llms
 
-import (
-	"time"
-)
+import "time"
 
 type Chat interface {
 	ID() string
@@ -13,8 +11,8 @@ type Chat interface {
 }
 
 type Storage interface {
-	Init() error
+	Store(*ChatData) error
+	Load() (map[string]*ChatData, error)
+	Clear()
 	RemoveDead(time.Duration)
-	Import() (map[string]*ChatData, error)
-	Update(*ChatData) error
 }

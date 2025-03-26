@@ -202,17 +202,16 @@ func (c *Client) DoRequest(req *http.Request, opts ...ReqOpts) (int, []byte, map
 		c.logg.Error("REQ ERR:" + fmt.Sprintf("%s %s>%s", req.Method, req.URL.String(), err.Error()))
 		return 502, nil, nil, err
 	}
-	if resp.StatusCode != 200 {
-		c.logg.Error("REQ NOT OK:" + fmt.Sprintf("%s %s>%d", req.Method, req.URL.String(), resp.StatusCode))
-		return 502, nil, nil, err
-	}
 	defer resp.Body.Close()
+	sc := resp.StatusCode
+	if sc >= 400 {
+		c.logg.Warning("REQ NOT OK:" + fmt.Sprintf("%s %s>%d", req.Method, req.URL.String(), sc))
+	}
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		c.logg.Error("RESP READ ERR:" + fmt.Sprintf("%s %s>%s", req.Method, req.URL.String(), err.Error()))
-		return 502, nil, nil, err
+		return sc, nil, nil, err
 	}
-	sc := resp.StatusCode
 
 	// Collect response headers
 	h := make(map[string]string)
@@ -243,7 +242,7 @@ func New(opts ...HTTPOpts) *Client {
 			Transport: &http.Transport{
 				Proxy:               http.ProxyFromEnvironment,
 				IdleConnTimeout:     time.Second * 10,
-				MaxConnsPerHost:     77,
+				MaxConnsPerHost:     777,
 				MaxIdleConns:        1,
 				MaxIdleConnsPerHost: 1,
 				TLSClientConfig:     opt.tls,

@@ -4,6 +4,6 @@ type StorageType byte
 
 const (
 	Memory StorageType = iota
-	File               // not supported
+	File               // use bolt storage
 	Redis              // not supported
 )

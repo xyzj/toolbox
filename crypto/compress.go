@@ -7,7 +7,6 @@ import (
 	"io"
 	"sync"
 
-	"github.com/klauspost/compress/snappy"
 	"github.com/klauspost/compress/zstd"
 )
 
@@ -17,7 +16,6 @@ type CompressType byte
 const (
 	CompressZlib CompressType = iota
 	CompressGZip
-	CompressSnappy
 	CompressZstd
 )
 
@@ -57,42 +55,6 @@ func (e *zstdDec) Decode(src []byte) ([]byte, error) {
 	// }
 	// e.coder.Close()
 	e.coder.WriteTo(e.buf)
-	return e.buf.Bytes(), nil
-}
-
-type snappyEnc struct {
-	buf   *bytes.Buffer
-	in    *bytes.Reader
-	coder *snappy.Writer
-}
-
-func (e *snappyEnc) Encode(src []byte) ([]byte, error) {
-	e.buf.Reset()
-	e.in.Reset(src)
-	e.coder.Reset(e.buf)
-	_, err := io.Copy(e.coder, e.in)
-	if err != nil {
-		e.coder.Close()
-		return nil, err
-	}
-	e.coder.Close()
-	return e.buf.Bytes(), nil
-}
-
-type snappyDec struct {
-	buf   *bytes.Buffer
-	in    *bytes.Reader
-	coder *snappy.Reader
-}
-
-func (e *snappyDec) Decode(src []byte) ([]byte, error) {
-	e.buf.Reset()
-	e.in.Reset(src)
-	e.coder.Reset(e.in)
-	_, err := io.Copy(e.buf, e.coder)
-	if err != nil {
-		return nil, err
-	}
 	return e.buf.Bytes(), nil
 }
 
@@ -188,8 +150,6 @@ func (z *Compressor) Encode(src []byte) ([]byte, error) {
 	switch z.t {
 	case CompressGZip:
 		return tool.(*gzipEnc).Encode(src)
-	case CompressSnappy:
-		return tool.(*snappyEnc).Encode(src)
 	case CompressZlib:
 		return tool.(*zlibEnc).Encode(src)
 	default:
@@ -203,8 +163,6 @@ func (z *Compressor) Decode(src []byte) ([]byte, error) {
 	switch z.t {
 	case CompressGZip:
 		return tool.(*gzipDec).Decode(src)
-	case CompressSnappy:
-		return tool.(*snappyDec).Decode(src)
 	case CompressZlib:
 		return tool.(*zlibDec).Decode(src)
 	default:
@@ -229,21 +187,6 @@ func NewCompressor(t CompressType) *Compressor {
 				buf:   &bytes.Buffer{},
 				in:    bytes.NewReader([]byte{}),
 				coder: new(gzip.Reader),
-			}
-		}
-	case CompressSnappy:
-		encnew = func() any {
-			return &snappyEnc{
-				buf:   &bytes.Buffer{},
-				in:    bytes.NewReader([]byte{}),
-				coder: snappy.NewBufferedWriter(nil),
-			}
-		}
-		decnew = func() any {
-			return &snappyDec{
-				buf:   &bytes.Buffer{},
-				in:    bytes.NewReader([]byte{}),
-				coder: snappy.NewReader(nil),
 			}
 		}
 	case CompressZlib:

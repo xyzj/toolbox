@@ -56,8 +56,8 @@ func (m *StructMap[KEY, VALUE]) DeleteMore(keys ...KEY) {
 	m.locker.Unlock()
 }
 
-// Clean 清空内容
-func (m *StructMap[KEY, VALUE]) Clean() {
+// Clear 清空内容
+func (m *StructMap[KEY, VALUE]) Clear() {
 	m.locker.Lock()
 	for k := range m.data {
 		delete(m.data, k)

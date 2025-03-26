@@ -88,8 +88,8 @@ func (m *SliceMap[T]) DeleteItem(key string, item T) {
 	}
 }
 
-// Clean 清空内容
-func (m *SliceMap[T]) Clean() {
+// Clear 清空内容
+func (m *SliceMap[T]) Clear() {
 	m.locker.Lock()
 	for k := range m.data {
 		delete(m.data, k)

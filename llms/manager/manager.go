@@ -62,7 +62,7 @@ func (m *ChatManager) Chat(id, message string, f func([]byte) error, opts ...htt
 	}
 	m.chats.Store(chat.ID(), chat)
 	// save the chat
-	err = m.data.Update(chat.Print())
+	err = m.data.Store(chat.Print())
 	if err != nil {
 		m.opt.logg.Error("Update storage error: " + err.Error())
 		return errors.New("Update storage error: " + err.Error())
@@ -80,13 +80,15 @@ func (m *ChatManager) Stop(id string) error {
 }
 
 func (m *ChatManager) Load() {
-	m.data.RemoveDead(m.opt.chatLifeTime)
-	chats, err := m.data.Import()
+	chats, err := m.data.Load()
 	if err != nil {
-		m.opt.logg.Error("Import storage error: " + err.Error())
+		m.opt.logg.Error("Load storage error: " + err.Error())
 		return
 	}
 	for id, chat := range chats {
+		if time.Since(time.Unix(chat.LastUpdate, 0)) > m.opt.chatLifeTime {
+			continue
+		}
 		switch chat.ChatType {
 		case llms.Ollama:
 			c := &ollama.Chat{}
@@ -109,10 +111,17 @@ func NewChatManager(opts ...Opts) *ChatManager {
 	for _, o := range opts {
 		o(opt)
 	}
-	opt.dataStorage.Init()
-	return &ChatManager{
+	c := &ChatManager{
 		opt:   opt,
 		chats: cache.NewAnyCache[llms.Chat](opt.chatLifeTime),
 		data:  opt.dataStorage,
 	}
+	go func() {
+		t := time.NewTicker(time.Minute * 5)
+		for range t.C {
+			c.data.RemoveDead(opt.chatLifeTime)
+		}
+	}()
+	c.Load()
+	return c
 }

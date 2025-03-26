@@ -71,9 +71,9 @@ func (f *File) Keys() []string {
 	// return ss
 }
 
-// Clean 清空配置项
-func (f *File) Clean() {
-	f.items.Clean()
+// Clear 清空配置项
+func (f *File) Clear() {
+	f.items.Clear()
 	f.data.Reset()
 }
 
@@ -184,7 +184,7 @@ func (f *File) FromFile(configfile string) error {
 	if f.items == nil {
 		f.items = mapfx.NewStructMap[string, Item]()
 	} else {
-		f.items.Clean()
+		f.items.Clear()
 	}
 	b, err := os.ReadFile(f.filepath)
 	if err != nil {

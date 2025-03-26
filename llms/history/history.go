@@ -2,8 +2,8 @@ package history
 
 import (
 	"container/ring"
-	"encoding/json"
 
+	"github.com/xyzj/toolbox/json"
 	"github.com/xyzj/toolbox/llms"
 )
 
@@ -67,4 +67,22 @@ func (u *ChatHistory) Slice() []*llms.Message {
 
 func (u *ChatHistory) MarshalJSON() ([]byte, error) {
 	return json.Marshal(u.Slice())
+}
+
+func (u *ChatHistory) ToJSON() string {
+	b, err := json.Marshal(u.Slice())
+	if err != nil {
+		return ""
+	}
+	return json.String(b)
+}
+
+func (u *ChatHistory) FromJSON(s string) error {
+	a := make([]*llms.Message, 0)
+	err := json.Unmarshal(json.Bytes(s), &a)
+	if err != nil {
+		return err
+	}
+	u.StoreMany(a...)
+	return nil
 }

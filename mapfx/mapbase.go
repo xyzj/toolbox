@@ -52,8 +52,8 @@ func (m *BaseMap[T]) Delete(key string) {
 	m.locker.Unlock()
 }
 
-// Clean 清空内容
-func (m *BaseMap[T]) Clean() {
+// Clear 清空内容
+func (m *BaseMap[T]) Clear() {
 	m.locker.Lock()
 	for k := range m.data {
 		delete(m.data, k)

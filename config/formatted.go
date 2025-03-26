@@ -99,7 +99,7 @@ func (f *Formatted[ITEM]) FromFile(configfile string) error {
 	if f.items == nil {
 		f.items = mapfx.NewStructMap[string, ITEM]()
 	} else {
-		f.items.Clean()
+		f.items.Clear()
 	}
 	b, err := os.ReadFile(f.filepath)
 	if err != nil {

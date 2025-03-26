@@ -150,7 +150,7 @@ func (u *UniqueSlice[T]) StoreMany(items ...T) {
 	}
 }
 
-func (u *UniqueSlice[T]) Clean() {
+func (u *UniqueSlice[T]) Clear() {
 	u.locker.Lock()
 	defer u.locker.Unlock()
 	u.data = make([]T, 0)

@@ -12,18 +12,11 @@ func NewMemStorage() llms.Storage {
 	return &MemStorage{}
 }
 
-func (s *MemStorage) Init() error {
-	return nil
-}
+func (s *MemStorage) Clear() {}
 
-func (s *MemStorage) RemoveDead(time.Duration) {
-	return
-}
+func (s *MemStorage) Store(chat *llms.ChatData) error { return nil }
 
-func (s *MemStorage) Import() (map[string]*llms.ChatData, error) {
+func (s *MemStorage) Load() (map[string]*llms.ChatData, error) {
 	return make(map[string]*llms.ChatData), nil
 }
-
-func (s *MemStorage) Update(*llms.ChatData) error {
-	return nil
-}
+func (s *MemStorage) RemoveDead(t time.Duration) {}

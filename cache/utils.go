@@ -31,7 +31,7 @@ import (
 
 type Cache[T any] interface {
 	Close()
-	Clean()
+	Clear()
 	Len() int
 	Extension(key string)
 	Store(key string, value T) error
@@ -55,8 +55,8 @@ func (ac *EmptyCache[T]) SetCleanUp(cleanup time.Duration) {}
 // Close 关闭这个缓存，如果需要再次使用，应调用NewEmptyCache方法重新初始化
 func (ac *EmptyCache[T]) Close() {}
 
-// Clean 清空这个缓存
-func (ac *EmptyCache[T]) Clean() {}
+// Clear 清空这个缓存
+func (ac *EmptyCache[T]) Clear() {}
 
 // Len 返回缓存内容数量
 func (ac *EmptyCache[T]) Len() int {
