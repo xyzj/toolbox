@@ -8,13 +8,12 @@ import (
 
 type Opt struct {
 	logg          logger.Logger
-	mod           TCPFactory
+	mod           Client
 	readTimeout   time.Duration
 	writeTimeout  time.Duration
 	registTimeout time.Duration
 	keepAlive     time.Duration
 	helloMsg      []*SendMessage
-	bind          string
 	maxQueue      int32
 	multiTargets  bool
 }
@@ -22,44 +21,79 @@ type Opts func(opt *Opt)
 
 var defaultOpt = Opt{
 	logg:          logger.NewConsoleLogger(),
-	mod:           &EmptyTCP{},
+	mod:           &EmptyClient{},
 	readTimeout:   time.Second * 100,
 	writeTimeout:  0,
 	registTimeout: 0,
 	keepAlive:     time.Second * 30,
 	helloMsg:      make([]*SendMessage, 0),
-	bind:          "0.0.0.0",
 	maxQueue:      1000,
 	multiTargets:  false,
 }
 
+// OptReadTimeout is an option function for the TCPFactory that sets the read timeout for client connections.
+// The provided duration is clamped to a minimum of 1 second and a maximum of 100 minutes.
+//
+// Parameters:
+//
+//	t: A time.Duration representing the read timeout duration.
+//
+// Returns:
+//
+//	An Opts function that can be used to configure the TCPFactory with the provided read timeout.
 func OptReadTimeout(t time.Duration) Opts {
 	return func(o *Opt) {
 		o.readTimeout = min(max(t, 1000000000), 6000000000000) // 1s～100m
 	}
 }
 
+// OptWriteTimeout is an option function for the TCPFactory that sets the write timeout for client connections.
+// The provided duration is clamped to a minimum of 0 and a maximum of 1 minute.
+//
+// Parameters:
+//
+//	t: A time.Duration representing the write timeout duration.
+//
+// Returns:
+//
+//	An Opts function that can be used to configure the TCPFactory with the provided write timeout.
 func OptWriteTimeout(t time.Duration) Opts {
 	return func(o *Opt) {
 		o.writeTimeout = min(max(t, 0), 60000000000) // 0~1m
 	}
 }
 
+// OptRegistTimeout is an option function for the TCPFactory that sets the registration timeout for client connections.
+// The provided duration is clamped to a minimum of 10 seconds.
+//
+// Parameters:
+//
+//	t: A time.Duration representing the registration timeout duration.
+//
+// Returns:
+//
+//	An Opts function that can be used to configure the TCPFactory with the provided registration timeout.
 func OptRegistTimeout(t time.Duration) Opts {
 	return func(o *Opt) {
 		o.registTimeout = max(t, 100000000000)
 	}
 }
 
+// OptKeepAlive is an option function for the TCPFactory that sets the keep-alive
+// period for client connections. The provided duration is clamped to a minimum of
+// 10 seconds.
+//
+// Parameters:
+//
+//	t: A time.Duration representing the keep-alive period duration.
+//
+// Returns:
+//
+//	An Opts function that can be used to configure the TCPFactory with the provided
+//	keep-alive period.
 func OptKeepAlive(t time.Duration) Opts {
 	return func(o *Opt) {
 		o.keepAlive = max(t, 100000000000)
-	}
-}
-
-func OptBinding(s string) Opts {
-	return func(o *Opt) {
-		o.bind = s
 	}
 }
 
@@ -140,10 +174,10 @@ func OptMatchMultiTargets(l bool) Opts {
 //	factory := NewTCPFactory(
 //		OptTcpFactory(&CustomTCPFactory{}),
 //	)
-func OptTcpFactory(t TCPFactory) Opts {
+func OptTcpFactory(t Client) Opts {
 	return func(o *Opt) {
 		if t == nil {
-			o.mod = &EmptyTCP{}
+			o.mod = &EmptyClient{}
 		} else {
 			o.mod = t
 		}

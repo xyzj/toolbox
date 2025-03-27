@@ -20,9 +20,9 @@ type TCPManager struct {
 	members  *mapfx.StructMap[uint64, tcpCore]
 	opt      *Opt
 	listener *net.TCPListener
+	addr     *net.TCPAddr
 	recycle  sync.Pool
 	shutdown atomic.Bool
-	port     int
 }
 
 func (t *TCPManager) HealthReport() map[uint64]any {
@@ -52,6 +52,16 @@ func (t *TCPManager) HealthReport() map[uint64]any {
 	return a
 }
 
+// WriteTo sends the given messages to the specified target connections.
+// If the multiTargets option is enabled, it continues to send messages to other connections even after
+// sending to the specified target.
+//
+// Parameters:
+// - target: A string representing the target connection identifier.
+// - msgs: Variadic parameter of type *SendMessage, representing the messages to be sent.
+//
+// Return:
+// - None
 func (t *TCPManager) WriteTo(target string, msgs ...*SendMessage) {
 	t.members.ForEachWithRLocker(func(key uint64, value *tcpCore) bool {
 		if value.writeTo(target, msgs...) {
@@ -61,8 +71,19 @@ func (t *TCPManager) WriteTo(target string, msgs ...*SendMessage) {
 	})
 }
 
+// Listen starts listening for incoming TCP connections on the specified address.
+// It creates a TCP listener, logs the listening address, and handles incoming connections.
+// For each accepted connection, it creates a new tcpCore instance, sets up keep-alive, linger options,
+// and starts separate goroutines for receiving and sending data.
+// If any error occurs during the listening process, it logs the error and returns the error.
+//
+// Parameters:
+// - None
+//
+// Return:
+// - An error if any, otherwise nil.
 func (t *TCPManager) Listen() error {
-	listener, err := net.ListenTCP("tcp", &net.TCPAddr{IP: net.ParseIP(t.opt.bind), Port: t.port, Zone: ""})
+	listener, err := net.ListenTCP("tcp", t.addr)
 	if err != nil {
 		t.opt.logg.Error(err.Error())
 		return err
@@ -128,38 +149,49 @@ func (t *TCPManager) Shutdown() {
 	t.listener.Close()
 }
 
-func NewTcpFactory(port int, opts ...Opts) (*TCPManager, error) {
-	if port <= 0 || port > 65535 {
-		return nil, ErrPortNotValid
+// NewTcpFactory creates a new TCPManager instance with the specified bind address and options.
+// It resolves the bind address and initializes the TCPManager with default or provided options.
+// The function returns a pointer to the created TCPManager instance and an error if any.
+//
+// Parameters:
+// - bind: A string representing the bind address in the format "host:port".
+// - opts: Variadic parameter of type Opts, which are optional configuration functions for the TCPManager.
+//
+// Return:
+// - A pointer to the created TCPManager instance.
+// - An error if any, otherwise nil.
+func NewTcpFactory(bind string, opts ...Opts) (*TCPManager, error) {
+	b, err := net.ResolveTCPAddr("tcp", bind)
+	if err != nil {
+		return nil, err
 	}
+	b.Port = min(max(b.Port, 1024), 65535)
 	opt := defaultOpt
 	for _, o := range opts {
 		o(&opt)
 	}
-	if net.ParseIP(opt.bind) == nil {
-		return nil, ErrHostNotValid
-	}
 	sid := atomic.Uint64{}
 	return &TCPManager{
-		port: port,
+		addr: b,
 		opt:  &opt,
 		recycle: sync.Pool{
 			New: func() any {
 				ctx, cancel := context.WithCancel(context.Background())
+				t1 := time.NewTimer(time.Minute)
+				t1.Stop()
 				return &tcpCore{
-					sockID:        sid.Add(1),
-					sendQueue:     queue.NewHighLowQueue[*SendMessage](opt.maxQueue),
-					closeOnce:     new(sync.Once),
-					closed:        atomic.Bool{},
-					readBuffer:    make([]byte, 8192),
-					readCache:     &bytes.Buffer{},
-					readTimeout:   opt.readTimeout,
-					writeTimeout:  opt.writeTimeout,
-					writeTimetick: time.NewTicker(time.Second),
-					tcpMod:        deepcopy.CopyAny(opt.mod),
-					closeCtx:      ctx,
-					closeFunc:     cancel,
-					logg:          opt.logg,
+					sockID:             sid.Add(1),
+					sendQueue:          queue.NewHighLowQueue[*SendMessage](opt.maxQueue),
+					closed:             atomic.Bool{},
+					readBuffer:         make([]byte, 8192),
+					readCache:          &bytes.Buffer{},
+					readTimeout:        opt.readTimeout,
+					writeTimeout:       opt.writeTimeout,
+					writeIntervalTimer: t1,
+					tcpClient:          deepcopy.CopyAny(opt.mod),
+					closeCtx:           ctx,
+					closeFunc:          cancel,
+					logg:               opt.logg,
 				}
 			},
 		},

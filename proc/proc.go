@@ -141,7 +141,7 @@ func StartRecord(opt *RecordOpt) *Recorder {
 			connst, _ = proce.Connections()
 			r.lastProc.Conns = int32(len(connst))
 			r.lastProc.Dt = time.Now().Unix()
-			r.procCache.Store(time.Now().Format("01-02 15:04:05"), deepcopy.CopyAny[*procStatus](r.lastProc))
+			r.procCache.Store(time.Now().Format("01-02 15:04:05"), deepcopy.CopyAny(r.lastProc))
 		}
 		t := time.NewTicker(r.opt.Timer)
 		c := 0

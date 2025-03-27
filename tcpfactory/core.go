@@ -15,23 +15,23 @@ import (
 )
 
 type tcpCore struct {
-	conn          *net.TCPConn // 连接实例
-	sendQueue     *queue.HighLowQueue[*SendMessage]
-	closeOnce     *sync.Once
-	readCache     *bytes.Buffer // 数据读取临时缓存
-	tcpMod        TCPFactory    // 设备功能模块
-	logg          logger.Logger
-	timeLastWrite time.Time          // 上次发送时间
-	timeLastRead  time.Time          // 上次数据读取时间
-	readTimeout   time.Duration      // 读取超时
-	writeTimeout  time.Duration      // 发送超时
-	writeTimetick *time.Ticker       // 发送间隔计时
-	closeCtx      context.Context    // 关闭上下文
-	closeFunc     context.CancelFunc // 关闭事件
-	readBuffer    []byte             // 读取缓存
-	sockID        uint64             // 实例id
-	remoteAddr    string             // 远端地址
-	closed        atomic.Bool        // 是否已关闭
+	conn               *net.TCPConn // 连接实例
+	sendQueue          *queue.HighLowQueue[*SendMessage]
+	closeOnce          *sync.Once
+	readCache          *bytes.Buffer // 数据读取临时缓存
+	tcpClient          Client        // 设备功能模块
+	logg               logger.Logger
+	timeLastWrite      time.Time          // 上次发送时间
+	timeLastRead       time.Time          // 上次数据读取时间
+	readTimeout        time.Duration      // 读取超时
+	writeTimeout       time.Duration      // 发送超时
+	writeIntervalTimer *time.Timer        // 发送间隔计时
+	closeCtx           context.Context    // 关闭上下文
+	closeFunc          context.CancelFunc // 关闭事件
+	readBuffer         []byte             // 读取缓存
+	sockID             uint64             // 实例id
+	remoteAddr         string             // 远端地址
+	closed             atomic.Bool        // 是否已关闭
 }
 
 func (t *tcpCore) formatLog(s string) string {
@@ -46,7 +46,7 @@ func (t *tcpCore) connect(conn *net.TCPConn, msgs ...*SendMessage) {
 	t.timeLastRead = time.Now()
 	t.timeLastWrite = time.Now()
 	t.sendQueue.Open()
-	t.tcpMod.OnConnect(conn)
+	t.tcpClient.OnConnect(conn)
 	for _, msg := range msgs {
 		t.sendQueue.Put(msg)
 	}
@@ -58,10 +58,10 @@ func (t *tcpCore) disconnect(s string) {
 		t.closed.Store(true)
 		t.conn.Close()
 		t.closeFunc()
-		t.writeTimetick.Stop()
+		t.writeIntervalTimer.Stop()
 		t.sendQueue.Close()
 		t.readCache.Reset()
-		t.tcpMod.OnDisconnect(s)
+		t.tcpClient.OnDisconnect(s)
 		t.logg.Error(t.formatLog(s))
 	})
 }
@@ -90,7 +90,7 @@ func (t *tcpCore) recv() {
 		}
 		t.timeLastRead = time.Now()
 		d = t.readBuffer[:n]
-		t.logg.Info(t.formatLog("read:" + t.tcpMod.FormatDataToLog(d)))
+		t.logg.Info(t.formatLog("read:" + t.tcpClient.FormatDataToLog(d)))
 		// 检查缓存
 		if t.readCache.Len() > 0 {
 			t.readCache.Write(d)
@@ -99,10 +99,10 @@ func (t *tcpCore) recv() {
 		// 清理缓存
 		t.readCache.Reset()
 		// 数据解析
-		unfinish, echo = t.tcpMod.OnRecive(d)
+		unfinish, echo = t.tcpClient.OnRecive(d)
 		if len(unfinish) > 0 {
 			t.readCache.Write(unfinish)
-			t.logg.Warning(t.formatLog("read unfinish:" + t.tcpMod.FormatDataToLog(d)))
+			t.logg.Warning(t.formatLog("read unfinish:" + t.tcpClient.FormatDataToLog(d)))
 		}
 		if len(echo) > 0 {
 			for _, s := range echo {
@@ -131,11 +131,11 @@ func (t *tcpCore) send() {
 				return
 			}
 			t.timeLastWrite = time.Now()
-			t.logg.Info(t.formatLog("send:" + t.tcpMod.FormatDataToLog(msg.Data)))
+			t.logg.Info(t.formatLog("send:" + t.tcpClient.FormatDataToLog(msg.Data)))
 			if msg.Interval > 0 {
-				t.writeTimetick.Reset(msg.Interval)
+				t.writeIntervalTimer.Reset(msg.Interval)
 				select {
-				case <-t.writeTimetick.C:
+				case <-t.writeIntervalTimer.C:
 					continue
 				case <-t.closeCtx.Done():
 					return
@@ -152,7 +152,7 @@ func (t *tcpCore) writeTo(target string, msgs ...*SendMessage) bool {
 	if t.closed.Load() {
 		return false
 	}
-	if t.tcpMod.MatchTarget(target) {
+	if t.tcpClient.MatchTarget(target) {
 		for _, msg := range msgs {
 			t.sendQueue.Put(msg)
 		}
@@ -165,5 +165,5 @@ func (t *tcpCore) healthReport() (any, bool) {
 	if t.closed.Load() {
 		return "", false
 	}
-	return t.tcpMod.Report()
+	return t.tcpClient.Report()
 }

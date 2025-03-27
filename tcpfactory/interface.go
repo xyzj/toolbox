@@ -10,7 +10,7 @@ type SendMessage struct {
 	Interval time.Duration
 }
 
-type TCPFactory interface {
+type Client interface {
 	// OnConnect is called when the connection is established
 	OnConnect(*net.TCPConn)
 	// OnDisconnect is called when the connection is closed
@@ -25,11 +25,34 @@ type TCPFactory interface {
 	Report() (any, bool)
 }
 
-type EmptyTCP struct{}
+type EmptyClient struct{}
 
-func (t *EmptyTCP) OnConnect(*net.TCPConn)                   {}
-func (t *EmptyTCP) OnDisconnect(string)                      {}
-func (t *EmptyTCP) OnRecive([]byte) ([]byte, []*SendMessage) { return nil, nil }
-func (t *EmptyTCP) FormatDataToLog(b []byte) string          { return string(b) }
-func (t *EmptyTCP) MatchTarget(string) bool                  { return false }
-func (t *EmptyTCP) Report() (any, bool)                      { return "", false }
+func (t *EmptyClient) OnConnect(*net.TCPConn)                   {}
+func (t *EmptyClient) OnDisconnect(string)                      {}
+func (t *EmptyClient) OnRecive([]byte) ([]byte, []*SendMessage) { return nil, nil }
+func (t *EmptyClient) FormatDataToLog(b []byte) string          { return string(b) }
+func (t *EmptyClient) MatchTarget(string) bool                  { return false }
+func (t *EmptyClient) Report() (any, bool)                      { return "", false }
+
+type EchoClient struct {
+	name string
+}
+
+// OnConnect is called when the connection is established, save the remote address as the client name.
+func (t *EchoClient) OnConnect(n *net.TCPConn) {
+	t.name = n.RemoteAddr().String()
+}
+func (t *EchoClient) OnDisconnect(string) {}
+
+// OnRecive is called when data is received. It returns nil for unfinished data
+// and a slice containing a single SendMessage with the received data.
+func (t *EchoClient) OnRecive(b []byte) ([]byte, []*SendMessage) {
+	return nil, []*SendMessage{
+		{
+			Data: b,
+		},
+	}
+}
+func (t *EchoClient) FormatDataToLog(b []byte) string { return string(b) }
+func (t *EchoClient) MatchTarget(n string) bool       { return string(n) == t.name }
+func (t *EchoClient) Report() (any, bool)             { return "", true }
