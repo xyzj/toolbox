@@ -147,3 +147,14 @@ func GlobalIPs() ([]string, []string, error) {
 	}
 	return v4, v6, nil
 }
+
+func CheckTCPAddr(s string) (*net.TCPAddr, bool) {
+	if s == "" {
+		return nil, false
+	}
+	if a, err := net.ResolveTCPAddr("tcp", s); err != nil || a.Port == 0 {
+		return nil, false
+	} else {
+		return a, true
+	}
+}

@@ -2,19 +2,18 @@
 package ginmiddleware
 
 import (
-	"crypto/tls"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/xyzj/toolbox"
 	"github.com/xyzj/toolbox/loopfunc"
-	"github.com/xyzj/toolbox/pathtool"
 )
 
 /*
@@ -52,10 +51,9 @@ type ServiceOption struct {
 // port：端口号
 // h： http.hander, like gin.New()
 func ListenAndServe(port int, h *gin.Engine) error {
-	ListenAndServeWithOption(&ServiceOption{
-		HTTPPort:   fmt.Sprintf(":%d", port),
-		EngineFunc: func() *gin.Engine { return h },
-	})
+	ListenAndServeWithOption(
+		OptHTTP(fmt.Sprintf(":%d", port)),
+		OptEngineFunc(func() *gin.Engine { return h }))
 	return nil
 }
 
@@ -65,47 +63,28 @@ func ListenAndServe(port int, h *gin.Engine) error {
 // certfile： cert file path
 // keyfile： key file path
 // clientca: 客户端根证书用于验证客户端合法性
-func ListenAndServeTLS(port int, h *gin.Engine, certfile, keyfile string, clientca ...string) error {
-	ListenAndServeWithOption(&ServiceOption{
-		EngineFunc: func() *gin.Engine { return h },
-		HTTPSPort:  fmt.Sprintf(":%d", port),
-		CertFile:   certfile,
-		KeyFile:    keyfile,
-	})
+func ListenAndServeTLS(port int, h *gin.Engine, certfile, keyfile string) error {
+	ListenAndServeWithOption(
+		OptHTTPSFromFile(fmt.Sprintf(":%d", port), certfile, keyfile),
+		OptEngineFunc(func() *gin.Engine { return h }),
+	)
 	return nil
 }
 
 // ListenAndServeWithOption 启动服务
-func ListenAndServeWithOption(opt *ServiceOption) {
-	if opt.HTTPPort == "" && opt.HTTPSPort == "" {
-		println("no server start")
+func ListenAndServeWithOption(opts ...Opts) {
+	opt := defaultOpt
+	for _, o := range opts {
+		o(&opt)
+	}
+	if opt.http+opt.https == "" {
+		opt.logg.Error("no service port is valid")
 		os.Exit(1)
-	}
-	if !opt.Debug {
-		gin.SetMode(gin.ReleaseMode)
-	}
-	if opt.ReadTimeout == 0 {
-		opt.ReadTimeout = time.Second * 120
-	}
-	if opt.WriteTimeout == 0 {
-		opt.WriteTimeout = time.Second * 120
-	}
-	if opt.IdleTimeout == 0 {
-		opt.IdleTimeout = time.Second * 60
-	}
-	if opt.EngineFunc == nil {
-		opt.EngineFunc = func() *gin.Engine {
-			if opt.Engine == nil {
-				return LiteEngine(opt.LogFile, opt.LogDays, opt.Hosts...)
-			} else {
-				return opt.Engine
-			}
-		}
 	}
 	// 路由处理
 	findRoot := false
 	findIcon := false
-	h := opt.EngineFunc()
+	h := opt.engineFunc()
 	for _, v := range h.Routes() {
 		if v.Path == "/" {
 			findRoot = true
@@ -126,86 +105,48 @@ func ListenAndServeWithOption(opt *ServiceOption) {
 			c.Writer.Write(favicon)
 		})
 	}
-	opt.Engine = h
-
+	wg := sync.WaitGroup{}
 	// 启动https服务
-	if opt.HTTPSPort != ":0" && opt.HTTPSPort != "" {
+	if opt.https != "" {
+		wg.Add(1)
 		loopfunc.GoFunc(func(params ...interface{}) {
-			if !pathtool.IsExist(opt.CertFile) || !pathtool.IsExist(opt.KeyFile) {
-				fmt.Fprintf(os.Stdout, "%s [%s] %s\n", time.Now().Format(toolbox.ShortTimeFormat), "HTTP", "HTTPS server error: no cert or key file found")
-				return
-			}
-			cc, err := tls.LoadX509KeyPair(opt.CertFile, opt.KeyFile)
-			if err != nil {
-				fmt.Fprintf(os.Stdout, "%s [%s] %s\n", time.Now().Format(toolbox.ShortTimeFormat), "HTTP", "cert and key file load error:"+err.Error())
-				return
-			}
+			defer wg.Done()
 			s := &http.Server{
-				Addr:         opt.HTTPSPort,
-				ReadTimeout:  opt.ReadTimeout,
-				WriteTimeout: opt.WriteTimeout,
-				IdleTimeout:  opt.IdleTimeout,
+				Addr:         opt.https,
+				ReadTimeout:  opt.readTimeout,
+				WriteTimeout: opt.writeTimeout,
+				IdleTimeout:  opt.idleTimeout,
 				Handler:      h,
-				TLSConfig: &tls.Config{
-					Certificates: []tls.Certificate{cc},
-					CipherSuites: []uint16{
-						tls.TLS_AES_128_GCM_SHA256,
-						tls.TLS_AES_256_GCM_SHA384,
-						tls.TLS_CHACHA20_POLY1305_SHA256,
-						tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
-						tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
-						tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-						tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-						tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-						tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
-						tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
-						tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-						tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-						tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-						tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-						tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-						tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-					},
-				},
+				TLSConfig:    opt.tlsc,
 			}
-			loopfunc.GoFunc(func(params ...interface{}) {
-				for {
-					time.Sleep(time.Hour * 23)
-					if cc, err := tls.LoadX509KeyPair(opt.CertFile, opt.KeyFile); err == nil {
-						s.TLSConfig.Certificates[0] = cc
-						// s.TLSConfig = &tls.Config{
-						// 	Certificates: []tls.Certificate{cc},
-						// }
-					}
-				}
-			}, "cert update", os.Stdout)
-			fmt.Fprintf(os.Stdout, "%s [%s] %s\n", time.Now().Format(toolbox.ShortTimeFormat), "HTTP", "Start HTTPS server at "+opt.HTTPSPort)
+			fmt.Fprintf(os.Stdout, "%s [%s] %s\n", time.Now().Format(toolbox.ShortTimeFormat), "HTTP", "Start HTTPS server at "+opt.https)
 			if err := s.ListenAndServeTLS("", ""); err != nil {
 				fmt.Fprintf(os.Stdout, "%s [%s] %s\n", time.Now().Format(toolbox.ShortTimeFormat), "HTTP", "Start HTTPS server error: "+err.Error())
 			}
 		}, "https", os.Stdout)
 	}
-	// 启动http服务
-	if opt.HTTPPort != ":0" && opt.HTTPPort != "" {
+	if opt.http != "" {
+		wg.Add(1)
 		loopfunc.GoFunc(func(params ...interface{}) {
+			defer wg.Done()
 			s := &http.Server{
-				Addr:         opt.HTTPPort,
-				ReadTimeout:  opt.ReadTimeout,
-				WriteTimeout: opt.WriteTimeout,
-				IdleTimeout:  opt.IdleTimeout,
+				Addr:         opt.http,
+				ReadTimeout:  opt.readTimeout,
+				WriteTimeout: opt.writeTimeout,
+				IdleTimeout:  opt.idleTimeout,
 				Handler:      h,
 			}
-			fmt.Fprintf(os.Stdout, "%s [%s] %s\n", time.Now().Format(toolbox.ShortTimeFormat), "HTTP", "Start HTTP server at "+opt.HTTPPort)
+			fmt.Fprintf(os.Stdout, "%s [%s] %s\n", time.Now().Format(toolbox.ShortTimeFormat), "HTTP", "Start HTTP server at "+opt.http)
 			if err := s.ListenAndServe(); err != nil {
 				fmt.Fprintf(os.Stdout, "%s [%s] %s\n", time.Now().Format(toolbox.ShortTimeFormat), "HTTP", "Start HTTP server error: "+err.Error())
 			}
 		}, "http", os.Stdout)
 	}
-	select {}
+	wg.Wait()
 }
 
 // LiteEngine 轻量化基础引擎
-func LiteEngine(logfile string, logDays int, hosts ...string) *gin.Engine {
+func LiteEngine(w io.Writer, hosts ...string) *gin.Engine {
 	r := gin.New()
 	// 特殊路由处理
 	r.HandleMethodNotAllowed = true
@@ -224,11 +165,7 @@ func LiteEngine(logfile string, logDays int, hosts ...string) *gin.Engine {
 	// 处理转发ip
 	r.Use(XForwardedIP())
 	// 配置日志
-	var logDir, logName string
-	if logfile != "" && logDays > 0 {
-		logDir, logName = filepath.Split(logfile)
-	}
-	r.Use(LoggerWithRolling(logDir, logName, logDays))
+	r.Use(LogToWriter(w))
 	// 故障恢复
 	r.Use(Recovery())
 	// 绑定域名

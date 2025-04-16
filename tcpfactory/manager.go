@@ -10,6 +10,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/xyzj/deepcopy"
+	"github.com/xyzj/toolbox"
 	"github.com/xyzj/toolbox/loopfunc"
 	"github.com/xyzj/toolbox/mapfx"
 	"github.com/xyzj/toolbox/queue"
@@ -38,6 +39,7 @@ func (t *TCPManager) HealthReport() map[uint64]any {
 			value.disconnect("socket anomaly")
 			return true
 		}
+
 		if t.opt.registTimeout > 0 && time.Since(value.timeLastWrite) > t.opt.registTimeout && value.sendQueue.Len() == 0 {
 			if _, ok = value.healthReport(); !ok {
 				value.disconnect("unregistered connection")
@@ -88,7 +90,7 @@ func (t *TCPManager) Listen() error {
 		t.opt.logg.Error(err.Error())
 		return err
 	}
-	t.opt.logg.System(fmt.Sprintf("TCP listening to: %s", listener.Addr().String()))
+	t.opt.logg.System(fmt.Sprintf("[tcp] listening to: %s", listener.Addr().String()))
 	t.listener = listener
 	loopfunc.LoopFunc(func(params ...any) {
 		for !t.shutdown.Load() {
@@ -120,8 +122,8 @@ func (t *TCPManager) Listen() error {
 					conn.SetKeepAlive(false)
 				}
 				conn.SetLinger(0)
-				cli.connect(conn, t.opt.helloMsg...)
 				t.members.Store(cli.sockID, cli)
+				cli.connect(conn, t.opt.helloMsg...)
 				// recv
 				go func() {
 					defer func() {
@@ -160,15 +162,14 @@ func (t *TCPManager) Shutdown() {
 // Return:
 // - A pointer to the created TCPManager instance.
 // - An error if any, otherwise nil.
-func NewTcpFactory(bind string, opts ...Opts) (*TCPManager, error) {
-	b, err := net.ResolveTCPAddr("tcp", bind)
-	if err != nil {
-		return nil, err
-	}
-	b.Port = min(max(b.Port, 1024), 65535)
+func NewTcpFactory(opts ...Opts) (*TCPManager, error) {
 	opt := defaultOpt
 	for _, o := range opts {
 		o(&opt)
+	}
+	b, ok := toolbox.CheckTCPAddr(opt.bind)
+	if !ok {
+		return nil, fmt.Errorf("invalid bind address: %s", opt.bind)
 	}
 	sid := atomic.Uint64{}
 	return &TCPManager{
@@ -188,7 +189,7 @@ func NewTcpFactory(bind string, opts ...Opts) (*TCPManager, error) {
 					readTimeout:        opt.readTimeout,
 					writeTimeout:       opt.writeTimeout,
 					writeIntervalTimer: t1,
-					tcpClient:          deepcopy.CopyAny(opt.mod),
+					tcpClient:          deepcopy.CopyAny(opt.client),
 					closeCtx:           ctx,
 					closeFunc:          cancel,
 					logg:               opt.logg,

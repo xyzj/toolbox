@@ -56,3 +56,9 @@ func (l *MultiLogger) System(msg string) {
 		o.System(msg)
 	}
 }
+
+func (l *MultiLogger) SetLevel(ll LogLevel) {
+	for _, o := range l.outs {
+		o.SetLevel(ll)
+	}
+}

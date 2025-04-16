@@ -4,6 +4,7 @@ package tcpfactory
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -35,7 +36,7 @@ type tcpCore struct {
 }
 
 func (t *tcpCore) formatLog(s string) string {
-	return "[" + t.remoteAddr + "] " + s
+	return fmt.Sprintf("[ %s,%d ] %s", t.remoteAddr, t.sockID, s)
 }
 
 func (t *tcpCore) connect(conn *net.TCPConn, msgs ...*SendMessage) {
@@ -58,9 +59,9 @@ func (t *tcpCore) disconnect(s string) {
 		t.closed.Store(true)
 		t.conn.Close()
 		t.closeFunc()
-		t.writeIntervalTimer.Stop()
 		t.sendQueue.Close()
 		t.readCache.Reset()
+		t.writeIntervalTimer.Stop()
 		t.tcpClient.OnDisconnect(s)
 		t.logg.Error(t.formatLog(s))
 	})
@@ -90,7 +91,7 @@ func (t *tcpCore) recv() {
 		}
 		t.timeLastRead = time.Now()
 		d = t.readBuffer[:n]
-		t.logg.Info(t.formatLog("read:" + t.tcpClient.FormatDataToLog(d)))
+		t.logg.Info(t.formatLog("read:" + t.tcpClient.Format(d)))
 		// 检查缓存
 		if t.readCache.Len() > 0 {
 			t.readCache.Write(d)
@@ -102,7 +103,7 @@ func (t *tcpCore) recv() {
 		unfinish, echo = t.tcpClient.OnRecive(d)
 		if len(unfinish) > 0 {
 			t.readCache.Write(unfinish)
-			t.logg.Warning(t.formatLog("read unfinish:" + t.tcpClient.FormatDataToLog(d)))
+			t.logg.Warning(t.formatLog("read unfinish:" + t.tcpClient.Format(d)))
 		}
 		if len(echo) > 0 {
 			for _, s := range echo {
@@ -131,7 +132,7 @@ func (t *tcpCore) send() {
 				return
 			}
 			t.timeLastWrite = time.Now()
-			t.logg.Info(t.formatLog("send:" + t.tcpClient.FormatDataToLog(msg.Data)))
+			t.logg.Info(t.formatLog("send:" + t.tcpClient.Format(msg.Data)))
 			if msg.Interval > 0 {
 				t.writeIntervalTimer.Reset(msg.Interval)
 				select {

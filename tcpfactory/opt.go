@@ -8,12 +8,13 @@ import (
 
 type Opt struct {
 	logg          logger.Logger
-	mod           Client
+	client        Client
 	readTimeout   time.Duration
 	writeTimeout  time.Duration
 	registTimeout time.Duration
 	keepAlive     time.Duration
 	helloMsg      []*SendMessage
+	bind          string
 	maxQueue      int32
 	multiTargets  bool
 }
@@ -21,7 +22,8 @@ type Opts func(opt *Opt)
 
 var defaultOpt = Opt{
 	logg:          logger.NewConsoleLogger(),
-	mod:           &EmptyClient{},
+	client:        &EmptyClient{},
+	bind:          ":6880",
 	readTimeout:   time.Second * 100,
 	writeTimeout:  0,
 	registTimeout: 0,
@@ -29,6 +31,12 @@ var defaultOpt = Opt{
 	helloMsg:      make([]*SendMessage, 0),
 	maxQueue:      1000,
 	multiTargets:  false,
+}
+
+func OptBindAddr(s string) Opts {
+	return func(o *Opt) {
+		o.bind = s
+	}
 }
 
 // OptReadTimeout is an option function for the TCPFactory that sets the read timeout for client connections.
@@ -160,7 +168,7 @@ func OptMatchMultiTargets(l bool) Opts {
 	}
 }
 
-// OptTcpFactory is an option function for the TCPFactory that allows setting a custom
+// OptTcpClient is an option function for the TCPFactory that allows setting a custom
 // TCPFactory implementation. If no TCPFactory is provided, it defaults to an EmptyTCP.
 //
 // The function accepts a single parameter:
@@ -172,14 +180,14 @@ func OptMatchMultiTargets(l bool) Opts {
 // Example usage:
 //
 //	factory := NewTCPFactory(
-//		OptTcpFactory(&CustomTCPFactory{}),
+//		OptTcpClient(&CustomTCPFactory{}),
 //	)
-func OptTcpFactory(t Client) Opts {
+func OptTcpClient(t Client) Opts {
 	return func(o *Opt) {
 		if t == nil {
-			o.mod = &EmptyClient{}
+			o.client = &EmptyClient{}
 		} else {
-			o.mod = t
+			o.client = t
 		}
 	}
 }

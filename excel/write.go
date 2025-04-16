@@ -149,6 +149,25 @@ func (fd *FileData) Save() (string, error) {
 	return fn, nil
 }
 
+func (fd *FileData) ToFile(f string) (string, error) {
+	fn := fd.fileName
+	if f != "" {
+		fn = f
+	}
+	if !strings.HasSuffix(fn, ".xlsx") {
+		fn += ".xlsx"
+	}
+	if !isExist(filepath.Dir(fn)) {
+		os.MkdirAll(filepath.Dir(fn), 0o775)
+	}
+
+	err := fd.writeFile.Save(fn)
+	if err != nil {
+		return "", errors.New("excel-文件保存失败:" + err.Error())
+	}
+	return fn, nil
+}
+
 // NewExcel 创建新的excel文件
 // filename: 需要保存的文件路径，可不加扩展名
 // 返回：excel数据格式，错误

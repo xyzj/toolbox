@@ -26,6 +26,7 @@ type Logger interface {
 	Error(msg string)
 	System(msg string)
 	DefaultWriter() io.Writer
+	SetLevel(l LogLevel)
 }
 
 // NilLogger 空日志
@@ -48,6 +49,7 @@ func (l *NilLogger) System(msg string) {}
 
 // DefaultWriter 返回日志Writer
 func (l *NilLogger) DefaultWriter() io.Writer { return nil }
+func (l *NilLogger) SetLevel(LogLevel)        {}
 
 // StdLogger mx log
 type StdLogger struct {
@@ -95,6 +97,10 @@ func (l *StdLogger) DefaultWriter() io.Writer {
 	return l.out
 }
 
+func (l *StdLogger) SetLevel(ll LogLevel) {
+	l.logLevel = ll
+}
+
 // NewLogger init logger
 //
 // d: 日志保存路径
@@ -126,6 +132,21 @@ func NewConsoleLogger() Logger {
 	return &StdLogger{
 		out:      NewConsoleWriter(),
 		logLevel: LogDebug,
+	}
+	// return &MultiLogger{
+	// 	outs: []*StdLogger{
+	// 		{
+	// 			logLevel: LogDebug,
+	// 			out:      NewConsoleWriter(),
+	// 		},
+	// 	},
+	// }
+}
+
+func NewConsoleLoggerWithLevel(l LogLevel) Logger {
+	return &StdLogger{
+		out:      NewConsoleWriter(),
+		logLevel: l,
 	}
 	// return &MultiLogger{
 	// 	outs: []*StdLogger{
