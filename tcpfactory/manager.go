@@ -65,6 +65,9 @@ func (t *TCPManager) HealthReport() map[uint64]any {
 // Return:
 // - None
 func (t *TCPManager) WriteTo(target string, msgs ...*SendMessage) {
+	if len(msgs) == 0 {
+		return
+	}
 	t.members.ForEachWithRLocker(func(key uint64, value *tcpCore) bool {
 		if value.writeTo(target, msgs...) {
 			return t.opt.multiTargets

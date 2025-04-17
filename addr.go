@@ -152,7 +152,7 @@ func CheckTCPAddr(s string) (*net.TCPAddr, bool) {
 	if s == "" {
 		return nil, false
 	}
-	if a, err := net.ResolveTCPAddr("tcp", s); err != nil || a.Port == 0 {
+	if a, err := net.ResolveTCPAddr("tcp", s); err != nil {
 		return nil, false
 	} else {
 		return a, true

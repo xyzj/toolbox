@@ -9,19 +9,19 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	mydsn "github.com/go-sql-driver/mysql"
-	"github.com/microsoft/go-mssqldb/msdsn"
+	msdsn "github.com/microsoft/go-mssqldb/msdsn"
 	"github.com/xyzj/toolbox"
 	"github.com/xyzj/toolbox/cache"
 	"github.com/xyzj/toolbox/config"
 	"github.com/xyzj/toolbox/json"
 	"github.com/xyzj/toolbox/logger"
-	"gorm.io/driver/mysql"
+	mysql "gorm.io/driver/mysql"
+	pgsql "gorm.io/driver/postgres"
 	mssql "gorm.io/driver/sqlserver"
 	"gorm.io/gorm"
 )
@@ -158,10 +158,41 @@ func New(opt *Opt) (*Conn, error) {
 		cfg:       opt,
 		defaultDB: 1,
 	}
+	var host string
+	var port int
 	var connstr string
 	var orm *gorm.DB
 	var err error
 	reConn := 0
+	if strings.Contains(opt.Server, ":") {
+		n, ok := toolbox.CheckTCPAddr(opt.Server)
+		if ok {
+			port = n.Port
+			if n.IP == nil {
+				host = "127.0.0.1"
+			} else {
+				host = n.IP.String()
+			}
+		}
+	} else {
+		ok := toolbox.CheckIP(opt.Server)
+		if ok {
+			host = opt.Server
+		}
+	}
+	if host == "" {
+		return nil, fmt.Errorf("invalid server address")
+	}
+	if port == 0 {
+		switch opt.DriverType {
+		case DriveMySQL:
+			port = 3306
+		case DriveSQLServer:
+			port = 1433
+		case DrivePostgre:
+			port = 5432
+		}
+	}
 CONN:
 	dbidx := 1
 	var name, value, dbtype string
@@ -172,17 +203,9 @@ CONN:
 		}
 		switch opt.DriverType {
 		case DriveSQLServer:
-			ss := strings.Split(opt.Server, ":")
-			if len(ss) == 1 {
-				ss = append(ss, "1433")
-			}
-			pp, err := strconv.ParseUint(ss[1], 10, 64)
-			if err != nil {
-				pp = 1433
-			}
 			connstr = msdsn.Config{
-				Host:        ss[0],
-				Port:        pp,
+				Host:        host,
+				Port:        uint64(port),
 				User:        opt.User,
 				Password:    opt.Passwd,
 				Database:    dbname,
@@ -201,7 +224,7 @@ CONN:
 				AllowNativePasswords: true,
 				CheckConnLiveness:    true,
 				Net:                  "tcp",
-				Addr:                 opt.Server,
+				Addr:                 fmt.Sprintf("%s:%d", host, port),
 				User:                 opt.User,
 				Passwd:               opt.Passwd,
 				DBName:               dbname,
@@ -228,20 +251,25 @@ CONN:
 				if err != nil {
 					return nil, err
 				}
-				opt.Logger.System("[DB] Create database `" + dbname + "` on " + opt.Server)
+				opt.Logger.System("[db] Create database `" + dbname + "` on " + opt.Server)
 				if opt.InitScripts[k] != "" {
 					_, err = dd.Exec(opt.InitScripts[k])
 					if err != nil {
 						return nil, err
 					}
-					opt.Logger.System("[DB] Create tables in " + opt.Server + "/" + dbname)
+					opt.Logger.System("[db] Create tables in " + opt.Server + "/" + dbname)
 				}
 				d.isnew = true
 				reConn++
 				goto CONN
 			}
+		case DrivePostgre:
+			connstr = fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", host, port, opt.User, opt.Passwd, dbname)
+			orm, err = gorm.Open(pgsql.Open(connstr), &gorm.Config{})
+			if err != nil {
+				return nil, err
+			}
 		default:
-
 			return nil, fmt.Errorf("not support yet")
 		}
 		reConn = 0
@@ -279,7 +307,7 @@ CONN:
 		d.cacheHead = toolbox.CalcCRC32String([]byte(connstr))
 		d.cacheDir = toolbox.DefaultCacheDir
 	}
-	d.cfg.Logger.System("[DB] Success connect to server " + d.cfg.Server)
+	d.cfg.Logger.System("[db] Success connect to server " + d.cfg.Server)
 	return d, nil
 }
 
