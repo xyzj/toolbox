@@ -174,17 +174,17 @@ func (w *ECC) SetPrivateKey(key string) error {
 	return nil
 }
 
-// Encode ecc加密
+// Deprecated: Encode ecc加密
 func (w *ECC) Encode(b []byte) (CValue, error) {
 	return EmptyValue, errors.New("not supported")
 }
 
-// Decode ecc解密
+// Deprecated: Decode ecc解密
 func (w *ECC) Decode(b []byte) (string, error) {
 	return "", errors.New("not supported")
 }
 
-// DecodeBase64 从base64字符串解码
+// Deprecated: DecodeBase64 从base64字符串解码
 func (w *ECC) DecodeBase64(s string) (string, error) {
 	b, err := base64.StdEncoding.DecodeString(FillBase64(s))
 	if err != nil {
@@ -232,13 +232,13 @@ func (w *ECC) VerifySignFromHex(signature string, data []byte) (bool, error) {
 	return w.VerifySign(bb, data)
 }
 
-// Decrypt 兼容旧方法，直接解析base64字符串
+// Deprecated: Decrypt 兼容旧方法，直接解析base64字符串
 func (w *ECC) Decrypt(s string) string {
 	x, _ := w.DecodeBase64(s)
 	return x
 }
 
-// Encrypt 加密，兼容旧方法，直接返回base64字符串
+// Deprecated: Encrypt 加密，兼容旧方法，直接返回base64字符串
 func (w *ECC) Encrypt(s string) string {
 	x, err := w.Encode(json.Bytes(s))
 	if err != nil {
@@ -247,7 +247,7 @@ func (w *ECC) Encrypt(s string) string {
 	return x.Base64String()
 }
 
-// EncryptTo 加密字符串
+// Deprecated: EncryptTo 加密字符串
 func (w *ECC) EncryptTo(s string) CValue {
 	x, err := w.Encode(json.Bytes(s))
 	if err != nil {
