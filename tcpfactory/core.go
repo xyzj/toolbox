@@ -36,7 +36,7 @@ type tcpCore struct {
 }
 
 func (t *tcpCore) formatLog(s string) string {
-	return fmt.Sprintf("[ %s,%d ] %s", t.remoteAddr, t.sockID, s)
+	return fmt.Sprintf("[%s] %s", t.remoteAddr, s)
 }
 
 func (t *tcpCore) connect(conn *net.TCPConn, msgs ...*SendMessage) {
@@ -47,11 +47,11 @@ func (t *tcpCore) connect(conn *net.TCPConn, msgs ...*SendMessage) {
 	t.timeLastRead = time.Now()
 	t.timeLastWrite = time.Now()
 	t.sendQueue.Open()
+	t.logg.Info(t.formatLog("new connection established"))
 	t.tcpClient.OnConnect(conn)
 	for _, msg := range msgs {
 		t.sendQueue.Put(msg)
 	}
-	t.logg.Info(t.formatLog("new connection established"))
 }
 
 func (t *tcpCore) disconnect(s string) {
@@ -63,7 +63,7 @@ func (t *tcpCore) disconnect(s string) {
 		t.readCache.Reset()
 		t.writeIntervalTimer.Stop()
 		t.tcpClient.OnDisconnect(s)
-		t.logg.Error(t.formatLog(s))
+		t.logg.Error(t.formatLog("close:" + s))
 	})
 }
 
@@ -107,7 +107,7 @@ func (t *tcpCore) recv() {
 		}
 		if len(echo) > 0 {
 			for _, s := range echo {
-				t.sendQueue.Put(s)
+				t.sendQueue.PutFront(s)
 			}
 		}
 	}
@@ -153,7 +153,7 @@ func (t *tcpCore) writeTo(target string, msgs ...*SendMessage) bool {
 	if t.closed.Load() {
 		return false
 	}
-	if t.tcpClient.MatchTarget(target) {
+	if t.tcpClient.MatchTarget(target, false) {
 		for _, msg := range msgs {
 			t.sendQueue.Put(msg)
 		}

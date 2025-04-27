@@ -8,7 +8,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/xyzj/deepcopy"
 	"github.com/xyzj/toolbox"
 	"github.com/xyzj/toolbox/loopfunc"
@@ -106,7 +105,7 @@ func (t *TCPManager) Listen() error {
 				cli := t.recycle.Get().(*tcpCore)
 				defer func() {
 					if err := recover(); err != nil {
-						cli.disconnect(err.(error).Error())
+						cli.disconnect(fmt.Sprintf("%v", err))
 					} else {
 						cli.disconnect("socket closed")
 					}
@@ -131,7 +130,7 @@ func (t *TCPManager) Listen() error {
 				go func() {
 					defer func() {
 						if err := recover(); err != nil {
-							cli.disconnect(fmt.Sprintf("tcp reciver crash: %+v", errors.WithStack(err.(error))))
+							cli.disconnect(fmt.Sprintf("recv, %v", err))
 						}
 					}()
 					cli.recv()
