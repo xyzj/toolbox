@@ -26,7 +26,7 @@ require (
 	github.com/tovenja/cron/v3 v3.0.2
 	github.com/unrolled/secure v1.14.0
 	github.com/xyzj/deepcopy v0.0.0-20250124011539-76155efb897b
-	go.etcd.io/bbolt v1.3.10
+	go.etcd.io/bbolt v1.4.0
 	go.uber.org/ratelimit v0.3.1
 	golang.org/x/net v0.34.0
 	golang.org/x/text v0.23.0
