@@ -14,8 +14,6 @@ type SendMessage struct {
 // Client defines the interface for handling TCP connection lifecycle and message processing.
 // It provides methods for connection events, data handling, logging, and client status reporting.
 type Client interface {
-	// Format formats data to log, like hex string, json string
-	Format(data []byte) string
 	// MatchTarget is used to match if the target matches the client
 	MatchTarget(target string, prefix bool) bool
 	// Report is used to report client status, return status data and if the client is registered
@@ -26,12 +24,14 @@ type Client interface {
 	OnDisconnect(reson string)
 	// OnRecive is called when received data, return unfinished data, message need send to client
 	OnRecive(data []byte) ([]byte, []*SendMessage)
+	// OnSend is called when data is about to be sent, allowing the client to format or modify the outgoing data.
+	OnSend(data []byte)
 }
 
 // EmptyClient is a no-op implementation of the Client interface that provides default empty method implementations.
 type EmptyClient struct{}
 
-func (t *EmptyClient) Format(data []byte) string                { return string(data) }
+func (t *EmptyClient) OnSend([]byte)                            {}
 func (t *EmptyClient) MatchTarget(string, bool) bool            { return false }
 func (t *EmptyClient) Report() (any, bool)                      { return "", false }
 func (t *EmptyClient) OnConnect(*net.TCPConn)                   {}
@@ -44,7 +44,7 @@ type EchoClient struct {
 	name string
 }
 
-func (t *EchoClient) Format(data []byte) string { return string(data) }
+func (t *EchoClient) OnSend(b []byte) { println("send:" + string(b)) }
 func (t *EchoClient) MatchTarget(n string, prefix bool) bool {
 	if prefix {
 		return strings.HasPrefix(t.name, n)

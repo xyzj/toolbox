@@ -28,7 +28,6 @@ type TCPManager struct {
 func (t *TCPManager) HealthReport() map[uint64]any {
 	dis := make(map[uint64]string)
 	a := make(map[uint64]any)
-	var ok bool
 	t.members.ForEachWithRLocker(func(key uint64, value *tcpCore) bool {
 		if value.closed.Load() {
 			dis[key] = ""
@@ -40,10 +39,12 @@ func (t *TCPManager) HealthReport() map[uint64]any {
 		}
 
 		if t.opt.registTimeout > 0 && time.Since(value.timeLastWrite) > t.opt.registTimeout && value.sendQueue.Len() == 0 {
-			if _, ok = value.healthReport(); !ok {
+			if z, ok := value.healthReport(); !ok {
 				value.disconnect("unregistered connection")
-				return true
+			} else {
+				a[key] = z
 			}
+			return true
 		}
 		if z, ok := value.healthReport(); ok {
 			a[key] = z
@@ -103,17 +104,6 @@ func (t *TCPManager) Listen() error {
 			}
 			go func(conn *net.TCPConn) {
 				cli := t.recycle.Get().(*tcpCore)
-				defer func() {
-					if err := recover(); err != nil {
-						cli.disconnect(fmt.Sprintf("%v", err))
-					} else {
-						cli.disconnect("socket closed")
-					}
-					if !t.shutdown.Load() {
-						t.members.Delete(cli.sockID)
-						t.recycle.Put(cli)
-					}
-				}()
 				if t.opt.keepAlive > 0 {
 					conn.SetKeepAliveConfig(net.KeepAliveConfig{
 						Enable:   true,
@@ -125,18 +115,29 @@ func (t *TCPManager) Listen() error {
 				}
 				conn.SetLinger(0)
 				t.members.Store(cli.sockID, cli)
+				defer func() {
+					if err := recover(); err != nil {
+						cli.disconnect(fmt.Sprintf("%+v", err))
+					} else {
+						cli.disconnect("socket closed")
+					}
+					if !t.shutdown.Load() {
+						t.members.Delete(cli.sockID)
+						t.recycle.Put(cli)
+					}
+				}()
 				cli.connect(conn, t.opt.helloMsg...)
-				// recv
 				go func() {
 					defer func() {
 						if err := recover(); err != nil {
-							cli.disconnect(fmt.Sprintf("recv, %v", err))
+							cli.disconnect(fmt.Sprintf("send, %+v", err))
 						}
 					}()
-					cli.recv()
+					// send
+					cli.send()
 				}()
-				// send
-				cli.send()
+				// recv
+				cli.recv()
 			}(conn)
 		}
 	}, "tcplistener", t.opt.logg.DefaultWriter())
@@ -151,6 +152,10 @@ func (t *TCPManager) Listen() error {
 func (t *TCPManager) Shutdown() {
 	t.shutdown.Store(true)
 	t.listener.Close()
+}
+
+func (t *TCPManager) Len() int {
+	return t.members.Len()
 }
 
 // NewTcpFactory creates a new TCPManager instance with the specified bind address and options.

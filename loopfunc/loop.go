@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
+	"github.com/xyzj/toolbox/json"
 )
 
 const (
@@ -90,26 +90,12 @@ RUN:
 				// 非panic,不需要恢复
 				end = true
 			} else {
-				msg := ""
-				switch err := err.(type) {
-				case error:
-					msg = fmt.Sprintf("%+v", errors.WithStack(err))
-				case string:
-					msg = err
-				}
-				if msg != "" {
-					logWriter.Write([]byte(name + " [LOOP] crash: " + msg + "\n"))
-				}
+				logWriter.Write(json.Bytes(fmt.Sprintf(name+" [LOOP] crash: %+v\n", err)))
 				errCount++
 				if retry > 0 && errCount >= retry {
 					logWriter.Write([]byte(name + " [LOOP] the maximum number of retries has been reached, the end.\n"))
 					end = true
 				}
-				// if reflect.TypeOf(err).String() == "error" {
-				// 	logWriter.Write([]byte(fmt.Sprintf("%s [LOOP] crash: %v\n", name, errors.WithStack(err.(error)))))
-				// } else {
-				// 	logWriter.Write([]byte(fmt.Sprintf("%s [LOOP] crash: %v\n", name, err)))
-				// }
 			}
 			locker.Done()
 		}()
@@ -136,21 +122,7 @@ func GoFunc(f func(params ...any), name string, logWriter io.Writer, params ...a
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				msg := ""
-				switch err := err.(type) {
-				case error:
-					msg = fmt.Sprintf("%v", errors.WithStack(err))
-				case string:
-					msg = err
-				}
-				if msg != "" {
-					logWriter.Write([]byte(name + " [GoFunc] crash: " + msg + "\n"))
-				}
-				// if reflect.TypeOf(err).String() == "error" {
-				// 	logWriter.Write([]byte(fmt.Sprintf("%s [GO] crash: %v\n", name, errors.WithStack(err.(error)))))
-				// } else {
-				// 	logWriter.Write([]byte(fmt.Sprintf("%s [GO] crash: %v\n", name, err)))
-				// }
+				logWriter.Write(json.Bytes(fmt.Sprintf(name+" [LOOP] crash: %+v\n", err)))
 			}
 		}()
 		f(params...)

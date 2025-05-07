@@ -4,6 +4,7 @@ package tcpfactory
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/xyzj/toolbox/logger"
+	"github.com/xyzj/toolbox/loopfunc"
 	"github.com/xyzj/toolbox/queue"
 )
 
@@ -49,9 +51,25 @@ func (t *tcpCore) connect(conn *net.TCPConn, msgs ...*SendMessage) {
 	t.sendQueue.Open()
 	t.logg.Info(t.formatLog("new connection established"))
 	t.tcpClient.OnConnect(conn)
-	for _, msg := range msgs {
-		t.sendQueue.Put(msg)
-	}
+	loopfunc.GoFunc(func(params ...any) {
+		t1 := time.NewTicker(time.Second)
+		t1.Stop()
+		for _, msg := range msgs {
+			if t.closed.Load() {
+				return
+			}
+			if len(msg.Data) == 0 && msg.Interval > 0 {
+				t1.Reset(msg.Interval)
+				select {
+				case <-t1.C:
+				case <-t.closeCtx.Done():
+					return
+				}
+			} else {
+				t.sendQueue.Put(msg)
+			}
+		}
+	}, "say hello", t.logg.DefaultWriter())
 }
 
 func (t *tcpCore) disconnect(s string) {
@@ -62,8 +80,8 @@ func (t *tcpCore) disconnect(s string) {
 		t.sendQueue.Close()
 		t.readCache.Reset()
 		t.writeIntervalTimer.Stop()
+		t.logg.Debug(t.formatLog("close:" + s))
 		t.tcpClient.OnDisconnect(s)
-		t.logg.Error(t.formatLog("close:" + s))
 	})
 }
 
@@ -91,7 +109,7 @@ func (t *tcpCore) recv() {
 		}
 		t.timeLastRead = time.Now()
 		d = t.readBuffer[:n]
-		t.logg.Info(t.formatLog("read:" + t.tcpClient.Format(d)))
+		t.logg.Debug(t.formatLog("read:" + hex.EncodeToString(d)))
 		// 检查缓存
 		if t.readCache.Len() > 0 {
 			t.readCache.Write(d)
@@ -103,7 +121,7 @@ func (t *tcpCore) recv() {
 		unfinish, echo = t.tcpClient.OnRecive(d)
 		if len(unfinish) > 0 {
 			t.readCache.Write(unfinish)
-			t.logg.Warning(t.formatLog("read unfinish:" + t.tcpClient.Format(d)))
+			t.logg.Debug(t.formatLog("read unfinish:" + hex.EncodeToString(unfinish)))
 		}
 		if len(echo) > 0 {
 			for _, s := range echo {
@@ -126,13 +144,16 @@ func (t *tcpCore) send() {
 					return
 				}
 			}
-			_, err = t.conn.Write(msg.Data)
-			if err != nil {
-				t.disconnect("send error: " + err.Error())
-				return
+			if len(msg.Data) > 0 {
+				_, err = t.conn.Write(msg.Data)
+				if err != nil {
+					t.disconnect("send error: " + err.Error())
+					return
+				}
+				t.timeLastWrite = time.Now()
+				t.logg.Debug(t.formatLog("send:" + hex.EncodeToString(msg.Data)))
+				t.tcpClient.OnSend(msg.Data)
 			}
-			t.timeLastWrite = time.Now()
-			t.logg.Info(t.formatLog("send:" + t.tcpClient.Format(msg.Data)))
 			if msg.Interval > 0 {
 				t.writeIntervalTimer.Reset(msg.Interval)
 				select {

@@ -32,11 +32,14 @@ var (
 )
 
 func NewConsoleWriter() io.Writer {
-	return &Writer{
+	w := &Writer{
 		timeFormat: LongTimeFormat,
 		fno:        os.Stdout,
+		// chanGoWrite: make(chan []byte, 2000),
 		// out:        os.Stdout,
 	}
+	// w.startWrite()
+	return w
 }
 
 // NewWriter 一个新的log写入器
@@ -123,10 +126,10 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 	w.fno.Write(xp)
 	// if w.withFile {
 	// 	if w.delayWrite {
-	// 		w.chanGoWrite <- xp
-	// 	} else {
-	// 		w.fno.Write(xp)
-	// 	}
+	// w.chanGoWrite <- xp
+	// } else {
+	// 	w.fno.Write(xp)
+	// }
 	// } else {
 	// 	w.out.Write(xp)
 	// }
@@ -139,40 +142,12 @@ func (w *Writer) startWrite() {
 	}
 	go loopfunc.LoopFunc(func(params ...interface{}) {
 		tc := time.NewTicker(time.Minute * 10)
-		// tw := time.NewTicker(time.Second)
-		// buftick := &bytes.Buffer{}
-		// if !w.delayWrite {
-		// 	tw.Stop()
-		// }
+		defer tc.Stop()
 		for range tc.C {
 			if w.rollfile {
 				w.rollingFileNoLock()
 			}
 		}
-		// for {
-		// 	select {
-		// 	case p := <-w.chanGoWrite:
-		// 		// if w.withFile {
-		// 		// 	if w.delayWrite {
-		// 		buftick.Write(p)
-		// 		// } else {
-		// 		// 	w.fno.Write(p)
-		// 		// }
-		// 		// }
-		// 		// w.out.Write(buf.Bytes())
-		// 	case <-tc.C:
-		// 		if w.rollfile {
-		// 			w.rollingFileNoLock()
-		// 		}
-		// 	case <-tw.C:
-		// 		if w.withFile {
-		// 			if buftick.Len() > 0 {
-		// 				w.fno.Write(buftick.Bytes())
-		// 				buftick.Reset()
-		// 			}
-		// 		}
-		// 	}
-		// }
 	}, "log writer", nil)
 }
 
