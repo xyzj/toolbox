@@ -91,6 +91,18 @@ func (b *BoltDB) Delete(key string, bucket ...string) error {
 	})
 }
 
+// DeleteBucket 删除一个值
+func (b *BoltDB) DeleteBucket(bucket string) error {
+	var buc = json.Bytes(bucket)
+	return b.db.Update(func(tx *bbolt.Tx) error {
+		t := tx.Bucket(buc)
+		if t == nil {
+			return nil
+		}
+		return t.DeleteBucket(json.Bytes(bucket))
+	})
+}
+
 // ForEach 遍历所有key,value
 func (b *BoltDB) ForEach(f func(k, v string) error, bucket ...string) {
 	var buc []byte

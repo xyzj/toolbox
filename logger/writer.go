@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	fileTimeFormat = "060102"    // 日志文件命名格式
-	maxFileSize    = 1024 * 1024 // 100mb
+	fileTimeFormat = "060102"           // 日志文件命名格式
+	maxFileSize    = 1024 * 1024 * 1000 // 1000mb
 	// ShortTimeFormat 日志事件戳格式
 	ShortTimeFormat = "15:04:05.000 "
 	LongTimeFormat  = "Jan 02 15:04:05.000 " // 2006-01-02 15:04:05.000 "

@@ -33,7 +33,7 @@ func LogToWriter(w io.Writer, skippath ...string) gin.HandlerFunc {
 	gin.DefaultErrorWriter = w
 	chanlog := make(chan *logParam, 200)
 	if len(skippath) == 0 {
-		skippath = []string{"/showroutes", "/static"}
+		skippath = []string{"/favicon.ico", "/showroutes", "/static"}
 	}
 	go loopfunc.LoopFunc(func(params ...interface{}) {
 		for a := range chanlog {

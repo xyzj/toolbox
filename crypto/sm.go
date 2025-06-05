@@ -47,6 +47,18 @@ func (w *SM2) Keys() (CValue, CValue) {
 	return w.pubBytes, w.priBytes
 }
 
+// PrivateKeyLoaded returns true if the SM2 private key has been loaded,
+// indicated by a non-nil private key and non-empty private key bytes.
+func (w *SM2) PrivateKeyLoaded() bool {
+	return w.priKey != nil && len(w.priBytes) > 0
+}
+
+// PublicKeyLoaded returns true if the SM2 public key has been loaded,
+// indicated by a non-nil pubKey and non-empty pubBytes fields.
+func (w *SM2) PublicKeyLoaded() bool {
+	return w.pubKey != nil && len(w.pubBytes) > 0
+}
+
 // GenerateKey 创建sm2密钥对
 //
 //	返回，pubkey，prikey，error

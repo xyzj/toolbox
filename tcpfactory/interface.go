@@ -31,12 +31,12 @@ type Client interface {
 // EmptyClient is a no-op implementation of the Client interface that provides default empty method implementations.
 type EmptyClient struct{}
 
-func (t *EmptyClient) OnSend([]byte)                            {}
-func (t *EmptyClient) MatchTarget(string, bool) bool            { return false }
-func (t *EmptyClient) Report() (any, bool)                      { return "", false }
-func (t *EmptyClient) OnConnect(*net.TCPConn)                   {}
-func (t *EmptyClient) OnDisconnect(string)                      {}
-func (t *EmptyClient) OnRecive([]byte) ([]byte, []*SendMessage) { return nil, nil }
+func (t *EmptyClient) OnConnect(n *net.TCPConn)                   {}
+func (t *EmptyClient) OnDisconnect(s string)                      {}
+func (t *EmptyClient) MatchTarget(s string, prefix bool) bool     { return false }
+func (t *EmptyClient) Report() (any, bool)                        { return "", false }
+func (t *EmptyClient) OnSend(b []byte)                            {}
+func (t *EmptyClient) OnRecive(b []byte) ([]byte, []*SendMessage) { return nil, nil }
 
 // EchoClient is a simple implementation of the Client interface that echoes received data
 // and stores the remote connection's address as its name.
@@ -44,22 +44,21 @@ type EchoClient struct {
 	name string
 }
 
-func (t *EchoClient) OnSend(b []byte) { println("send:" + string(b)) }
-func (t *EchoClient) MatchTarget(n string, prefix bool) bool {
-	if prefix {
-		return strings.HasPrefix(t.name, n)
-	} else {
-		return t.name == string(n)
-	}
-}
-func (t *EchoClient) Report() (any, bool) { return "", true }
-
 // OnConnect is called when the connection is established, save the remote address as the client name.
 func (t *EchoClient) OnConnect(n *net.TCPConn) { t.name = n.RemoteAddr().String() }
 func (t *EchoClient) OnDisconnect(string)      {}
+func (t *EchoClient) MatchTarget(s string, prefix bool) bool {
+	if prefix {
+		return strings.HasPrefix(t.name, s)
+	} else {
+		return t.name == string(s)
+	}
+}
+func (t *EchoClient) Report() (any, bool) { return "", true }
+func (t *EchoClient) OnSend(b []byte)     { println("send:" + string(b)) }
 
 // OnRecive is called when data is received. It returns nil for unfinished data
 // and a slice containing a single SendMessage with the received data.
-func (t *EchoClient) OnRecive(data []byte) ([]byte, []*SendMessage) {
-	return nil, []*SendMessage{{Data: data}}
+func (t *EchoClient) OnRecive(b []byte) ([]byte, []*SendMessage) {
+	return nil, []*SendMessage{{Data: b}}
 }
