@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -65,7 +66,7 @@ func (t *TCPManager) HealthReport() map[uint64]any {
 // Return:
 // - None
 func (t *TCPManager) WriteTo(target string, msgs ...*SendMessage) {
-	if len(msgs) == 0 {
+	if len(msgs) == 0 || strings.TrimSpace(target) == "" {
 		return
 	}
 	t.members.ForEachWithRLocker(func(key uint64, value *tcpCore) bool {

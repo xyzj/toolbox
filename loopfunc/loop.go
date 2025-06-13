@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/xyzj/toolbox/json"
 )
 
@@ -90,7 +91,7 @@ RUN:
 				// 非panic,不需要恢复
 				end = true
 			} else {
-				logWriter.Write(json.Bytes(fmt.Sprintf(name+" [LOOP] crash: %+v\n", err)))
+				logWriter.Write(json.Bytes(fmt.Sprintf(name+" [LOOP] crash: %+v\n", errors.WithStack(err.(error)))))
 				errCount++
 				if retry > 0 && errCount >= retry {
 					logWriter.Write([]byte(name + " [LOOP] the maximum number of retries has been reached, the end.\n"))

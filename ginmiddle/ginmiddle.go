@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
@@ -117,24 +118,41 @@ func HideParams(params ...string) gin.HandlerFunc {
 // ReadParams 读取请求的参数，保存到c.Params
 func ReadParams() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ct := strings.Split(c.GetHeader("Content-Type"), ";")[0]
-		var bodyjs string
+		ct := strings.TrimSpace(strings.Split(c.GetHeader("Content-Type"), ";")[0])
+		// var bodyjs string
 		switch ct {
 		case "", "application/x-www-form-urlencoded", "application/json":
 			// 先检查url参数
 			x, _ := url.ParseQuery(c.Request.URL.RawQuery)
 			// 检查body，若和url里面出现相同的关键字，以body内容为准
 			if b, err := io.ReadAll(c.Request.Body); err == nil {
-				ans := gjson.ParseBytes(b)
+				// 去除非法字符
+				buf := strings.Builder{}
+				buf.Grow(len(b))
+				s := json.String(b)
+				for _, r := range s {
+					if unicode.IsPrint(r) && !unicode.Is(unicode.S, r) {
+						buf.WriteRune(r)
+					}
+				}
+				ans := gjson.Parse(buf.String())
 				if ans.IsObject() { // body是json
 					ans.ForEach(func(key gjson.Result, value gjson.Result) bool {
 						x.Set(key.String(), value.String())
 						return true
 					})
-					bodyjs = ans.String()
+					c.Params = append(c.Params, gin.Param{
+						Key:   "_body",
+						Value: ans.String(),
+					})
+					// bodyjs = ans.String()
 				} else { // body不是json，按urlencode处理
 					if len(b)+len(c.Request.URL.RawQuery) > 0 {
-						bodyjs = strings.Join([]string{c.Request.URL.RawQuery, json.String(b)}, "&")
+						c.Params = append(c.Params, gin.Param{
+							Key:   "_body",
+							Value: strings.Join([]string{c.Request.URL.RawQuery, json.String(b)}, "&"),
+						})
+						// bodyjs = strings.Join([]string{c.Request.URL.RawQuery, json.String(b)}, "&")
 						xbody, _ := url.ParseQuery(json.String(b))
 						for k := range xbody {
 							x.Set(k, xbody.Get(k))
@@ -154,12 +172,12 @@ func ReadParams() gin.HandlerFunc {
 				// 	continue
 				// }
 			}
-			if len(bodyjs) > 0 {
-				c.Params = append(c.Params, gin.Param{
-					Key:   "_body",
-					Value: bodyjs,
-				})
-			}
+			// if len(bodyjs) > 0 {
+			// 	c.Params = append(c.Params, gin.Param{
+			// 		Key:   "_body",
+			// 		Value: bodyjs,
+			// 	})
+			// }
 			return
 		case "multipart/form-data":
 			if mf, err := c.MultipartForm(); err == nil {
