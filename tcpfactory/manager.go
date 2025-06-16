@@ -60,7 +60,7 @@ func (t *TCPManager) HealthReport() map[uint64]any {
 // sending to the specified target.
 //
 // Parameters:
-// - target: A string representing the target connection identifier.
+// - targets: A string list representing the target connection identifier.
 // - msgs: Variadic parameter of type *SendMessage, representing the messages to be sent.
 //
 // Return:
@@ -72,6 +72,33 @@ func (t *TCPManager) WriteTo(target string, msgs ...*SendMessage) {
 	t.members.ForEachWithRLocker(func(key uint64, value *tcpCore) bool {
 		if value.writeTo(target, msgs...) {
 			return t.opt.multiTargets
+		}
+		return true
+	})
+}
+
+// WriteTo sends the given messages to the specified target connections.
+// If the multiTargets option is enabled, it continues to send messages to other connections even after
+// sending to the specified target.
+//
+// Parameters:
+// - targets: A string list representing the target connection identifier.
+// - msgs: Variadic parameter of type *SendMessage, representing the messages to be sent.
+//
+// Return:
+// - None
+func (t *TCPManager) WriteToMultiTargets(msg *SendMessage, targets ...string) {
+	if msg == nil || len(targets) == 0 {
+		return
+	}
+	t.members.ForEachWithRLocker(func(key uint64, value *tcpCore) bool {
+		for _, a := range targets {
+			if strings.TrimSpace(a) == "" {
+				continue
+			}
+			if value.writeTo(a, msg) {
+				return t.opt.multiTargets
+			}
 		}
 		return true
 	})
