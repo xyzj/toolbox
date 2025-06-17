@@ -21,6 +21,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/xyzj/toolbox/crypto"
 	"github.com/xyzj/toolbox/gocmd"
@@ -296,12 +297,15 @@ func CodeString(s string) string {
 	x := byte(rand.Int31n(126) + 1)
 	l := len(s)
 	salt := crypto.GetRandom(l)
-	var y, z bytes.Buffer
+	y := bytes.Buffer{}
+	y.Grow(l)
 	for _, v := range json.Bytes(s) {
 		y.WriteByte(v + x)
 	}
 	zz := y.Bytes()
 	var c1, c2 int
+	z := bytes.Buffer{}
+	z.Grow(l * 2)
 	z.WriteByte(x)
 	for i := 1; i < 2*l; i++ {
 		if i%2 == 0 {
@@ -313,8 +317,8 @@ func CodeString(s string) string {
 		}
 	}
 	a := base64.StdEncoding.EncodeToString(z.Bytes())
-	a = ReverseString(a)
-	a = SwapCase(a)
+	a = json.ReverseString(a)
+	a = json.SwapCase(a)
 	a = strings.Replace(a, "=", "", -1)
 	return a
 }
@@ -325,9 +329,10 @@ func DecodeString(s string) string {
 	if len(s) == 0 {
 		return ""
 	}
-	s = ReverseString(SwapCase(s))
+	s = json.ReverseString(json.SwapCase(s))
 	if y, ex := base64.StdEncoding.DecodeString(crypto.FillBase64(s)); ex == nil {
-		var ns bytes.Buffer
+		ns := bytes.Buffer{}
+		ns.Grow(len(y))
 		x := y[0]
 		for k, v := range y {
 			if k%2 != 0 {
@@ -381,6 +386,17 @@ func SwapCase(s string) string {
 		}
 	}
 	return ns.String()
+}
+
+func RemoveUnvisiable(s string) string {
+	buf := strings.Builder{}
+	buf.Grow(len(s))
+	for _, r := range s {
+		if unicode.IsPrint(r) && !unicode.Is(unicode.So, r) {
+			buf.WriteRune(r)
+		}
+	}
+	return buf.String()
 }
 
 // VersionInfo show something

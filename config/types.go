@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/xyzj/toolbox"
+	"github.com/xyzj/toolbox/crypto"
 	"github.com/xyzj/toolbox/json"
 )
 
@@ -66,6 +67,12 @@ func NewBoolValue(n bool) *Value {
 func NewCodeValue(s string) *Value {
 	return &Value{
 		nstr: toolbox.CodeString(s),
+	}
+}
+
+func NewObfuscatedValue(s string) *Value {
+	return &Value{
+		nstr: crypto.ObfuscationString(s),
 	}
 }
 
@@ -303,6 +310,13 @@ func (v *Value) TryDecode() string {
 	return v.nstr
 }
 
+func (v *Value) TryDeobfuscation() string {
+	if s := crypto.DeobfuscationString(v.nstr); s != "" {
+		return s
+	}
+	return v.nstr
+}
+
 func (v *Value) TryTimestamp(f string) int64 {
 	if f == "" {
 		f = toolbox.DateTimeFormat
@@ -398,6 +412,13 @@ func (rs VString) TryFloat64() float64 {
 // TryDecode try decode the value, if failed, return the origin
 func (rs VString) TryDecode() string {
 	if s := toolbox.DecodeString(string(rs)); s != "" {
+		return s
+	}
+	return string(rs)
+}
+
+func (rs VString) TryDeobfuscation() string {
+	if s := crypto.DeobfuscationString(string(rs)); s != "" {
 		return s
 	}
 	return string(rs)

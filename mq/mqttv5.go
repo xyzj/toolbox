@@ -161,10 +161,10 @@ func (m *MqttClientV5) WriteWithQos(topic string, body []byte, qos byte) error {
 		},
 	})
 	if err != nil {
-		m.cnf.Logg.Debug(m.cnf.LogHeader + "S Err:" + topic + "|" + err.Error())
+		m.cnf.Logg.Debug(m.cnf.LogHeader + "serr:" + topic + "|" + err.Error())
 		return err
 	}
-	m.cnf.Logg.Debug(m.cnf.LogHeader + " S:" + topic)
+	m.cnf.Logg.Debug(m.cnf.LogHeader + " s:" + topic)
 	return nil
 }
 
@@ -180,7 +180,7 @@ func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte))
 		opt.ClientID = toolbox.GetRandomString(19, true)
 	}
 	if opt.LogHeader == "" {
-		opt.LogHeader = "[MQTT]"
+		opt.LogHeader = "[mqtt]"
 	}
 	if opt.TLSConf == nil {
 		opt.TLSConf = &tls.Config{InsecureSkipVerify: true}
@@ -255,7 +255,7 @@ func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte))
 					Subscriptions: x,
 				})
 			}
-			opt.Logg.System(opt.LogHeader + " Success connect to " + opt.Addr)
+			opt.Logg.System(opt.LogHeader + " success connect to " + opt.Addr)
 			// 对失败消息进行补发
 			if opt.EnableFailureCache {
 				var err error
@@ -276,9 +276,9 @@ func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte))
 						},
 					})
 					if err != nil {
-						opt.Logg.Error(opt.LogHeader + " ReS Err:" + value.topic + "|" + err.Error())
+						opt.Logg.Error(opt.LogHeader + " reerr:" + value.topic + "|" + err.Error())
 					} else {
-						opt.Logg.Info(fmt.Sprintf("%s ReS:%s|%v", opt.LogHeader, value.topic, value.body))
+						opt.Logg.Info(fmt.Sprintf("%s re:%s|%v", opt.LogHeader, value.topic, value.body))
 					}
 					return true
 				})
@@ -313,7 +313,7 @@ func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte))
 			},
 			OnPublishReceived: []func(paho.PublishReceived) (bool, error){
 				func(pr paho.PublishReceived) (bool, error) {
-					opt.Logg.Debug(opt.LogHeader + " R:" + pr.Packet.Topic)
+					opt.Logg.Debug(opt.LogHeader + " r:" + pr.Packet.Topic)
 					recvCallback(pr.Packet.Topic, pr.Packet.Payload)
 					return true, nil
 				},

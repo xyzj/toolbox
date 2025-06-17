@@ -17,10 +17,9 @@ import (
 
 // File 配置文件
 type File struct {
-	items      *mapfx.StructMap[string, Item]
-	data       *bytes.Buffer
-	filepath   string
-	formatType FormatType
+	items    *mapfx.StructMap[string, Item]
+	data     *bytes.Buffer
+	filepath string
 }
 
 // Item 配置内容，包含注释，key,value,是否加密value

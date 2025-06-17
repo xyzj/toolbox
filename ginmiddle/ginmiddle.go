@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
@@ -127,15 +126,16 @@ func ReadParams() gin.HandlerFunc {
 			// 检查body，若和url里面出现相同的关键字，以body内容为准
 			if b, err := io.ReadAll(c.Request.Body); err == nil {
 				// 去除非法字符
-				buf := strings.Builder{}
-				buf.Grow(len(b))
-				s := json.String(b)
-				for _, r := range s {
-					if unicode.IsPrint(r) && !unicode.Is(unicode.S, r) {
-						buf.WriteRune(r)
-					}
-				}
-				ans := gjson.Parse(buf.String())
+				// buf := strings.Builder{}
+				// buf.Grow(len(b))
+				// s := json.String(b)
+				// for _, r := range s {
+				// 	if unicode.IsPrint(r) && !unicode.Is(unicode.So, r) {
+				// 		buf.WriteRune(r)
+				// 	}
+				// }
+				// ans := gjson.Parse(buf.String())
+				ans := gjson.ParseBytes(b)
 				if ans.IsObject() { // body是json
 					ans.ForEach(func(key gjson.Result, value gjson.Result) bool {
 						x.Set(key.String(), value.String())

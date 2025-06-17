@@ -2,12 +2,14 @@
 package crypto
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"io"
+	mrand "math/rand"
 	"os"
 	"strings"
 
@@ -111,6 +113,9 @@ func GetSM3(text string) string {
 
 // GetRandom 获取随机数据
 func GetRandom(l int) []byte {
+	if l == 0 {
+		return []byte{}
+	}
 	buf := make([]byte, l)
 	io.ReadFull(rand.Reader, buf)
 	return buf
@@ -171,4 +176,68 @@ func TLSConfigFromPEM(certpem, keypem, rootpem []byte) (*tls.Config, error) {
 		tc.ClientAuth = tls.RequireAndVerifyClientCert
 	}
 	return tc, nil
+}
+
+func ObfuscationString(s string) string {
+	x := byte(mrand.Int31n(126) + 1)
+	ll := len(s)
+	l := mrand.Intn(5) + 2
+	if ll <= l {
+		l = 2
+	}
+	salt := GetRandom(ll)
+	y := bytes.Buffer{}
+	y.Grow(ll * 2)
+	y.WriteByte(x)
+	y.WriteByte(byte(l))
+	y.WriteByte(salt[0])
+	c1 := 1
+	k := 0
+	ss := json.Bytes(s)
+	for _, v := range ss {
+		if k == l {
+			y.WriteByte(salt[c1])
+			c1++
+			k = 1
+		} else {
+			k++
+		}
+		y.WriteByte(v + x)
+	}
+	y.Write(GetRandom(3))
+	zz := y.Bytes()
+	zz = json.ReverseBytes(zz)
+	a := base64.StdEncoding.EncodeToString(zz)
+	a = json.ReverseString(a)
+	a = json.SwapCase(a)
+	a = strings.Replace(a, "=", "", -1)
+	return a
+}
+
+func DeobfuscationString(s string) string {
+	s = FillBase64(json.ReverseString(json.SwapCase(s)))
+	a, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		return ""
+	}
+	a = json.ReverseBytes(a)
+	x := a[0]
+	l := int(a[1])
+	a = a[3 : len(a)-3]
+	// buf := bytes.Buffer{}
+	// for _, v := range a {
+	// 	buf.WriteByte(v)
+	// }
+	y := bytes.Buffer{}
+	y.Grow(len(a))
+	k := 0
+	for _, v := range a {
+		if k == l {
+			k = 0
+			continue
+		}
+		k++
+		y.WriteByte(v - x)
+	}
+	return y.String()
 }
