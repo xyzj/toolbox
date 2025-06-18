@@ -83,6 +83,10 @@ type MqttClientV5 struct {
 	empty       bool
 }
 
+func (m *MqttClientV5) IsEmpty() bool {
+	return m.empty
+}
+
 // Close close the mqtt client
 func (m *MqttClientV5) Close() error {
 	if m.empty {
