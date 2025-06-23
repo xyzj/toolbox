@@ -77,6 +77,24 @@ func (t *TCPManager) WriteTo(target string, msgs ...*SendMessage) {
 	})
 }
 
+// WriteToFront sends one or more messages to the specified target connection(s) in the front-end.
+// If the target string is empty or no messages are provided, the function returns immediately.
+// The method iterates over all managed TCP connections and attempts to write the messages to the
+// connection matching the target identifier. If the write is successful and the multiTargets option
+// is enabled, the iteration continues to allow sending to multiple targets; otherwise, it stops after
+// the first successful write.
+func (t *TCPManager) WriteToFront(target string, msgs ...*SendMessage) {
+	if len(msgs) == 0 || strings.TrimSpace(target) == "" {
+		return
+	}
+	t.members.ForEachWithRLocker(func(key uint64, value *tcpCore) bool {
+		if value.writeToFront(target, msgs...) {
+			return t.opt.multiTargets
+		}
+		return true
+	})
+}
+
 // WriteTo sends the given messages to the specified target connections.
 // If the multiTargets option is enabled, it continues to send messages to other connections even after
 // sending to the specified target.

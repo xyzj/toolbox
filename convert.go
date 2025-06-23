@@ -63,6 +63,25 @@ func Float64ToByte(float float64) []byte {
 	return bytes
 }
 
+// Float32ToByte 32位浮点转bytes
+func Float32ToByteBig(float float32) []byte {
+	bits := math.Float32bits(float)
+
+	bytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(bytes, bits)
+
+	return bytes
+}
+
+// Float64ToByte 64位浮点转bytes
+func Float64ToByteBig(float float64) []byte {
+	bits := math.Float64bits(float)
+	bytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(bytes, bits)
+
+	return bytes
+}
+
 // FormatFloat64 格式化浮点精度，f-浮点数，p-小数位数
 func FormatFloat64(f float64, p int) float64 {
 	// println(fmt.Sprintf("%.10f", f))
@@ -318,12 +337,26 @@ func Int642Bytes(i int64, bigOrder bool) []byte {
 
 // Bytes2Float64 字节数组转双精度浮点，bigOrder==true,高位在前
 func Bytes2Float64(b []byte, bigOrder bool) float64 {
-	return math.Float64frombits(Bytes2Uint64(b, bigOrder))
+	if len(b) < 8 {
+		return 0
+	}
+	if bigOrder {
+		return math.Float64frombits(binary.BigEndian.Uint64(b))
+	}
+	return math.Float64frombits(binary.LittleEndian.Uint64(b))
+	// return math.Float64frombits(Bytes2Uint64(b, bigOrder))
 }
 
 // Bytes2Float32 字节数组转单精度浮点，bigOrder==true,高位在前
 func Bytes2Float32(b []byte, bigOrder bool) float32 {
-	return math.Float32frombits(uint32(Bytes2Uint64(b, bigOrder)))
+	if len(b) < 4 {
+		return 0
+	}
+	if bigOrder {
+		return math.Float32frombits(binary.BigEndian.Uint32(b))
+	}
+	return math.Float32frombits(binary.LittleEndian.Uint32(b))
+	// return math.Float32frombits(uint32(Bytes2Uint64(b, bigOrder)))
 }
 
 // Imgfile2Base64 图片转base64

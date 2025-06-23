@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/xyzj/toolbox/logger"
-	"github.com/xyzj/toolbox/loopfunc"
 	"github.com/xyzj/toolbox/queue"
 )
 
@@ -51,25 +50,28 @@ func (t *tcpCore) connect(conn *net.TCPConn, msgs ...*SendMessage) {
 	t.sendQueue.Open()
 	t.logg.Info(t.formatLog("new connection established"))
 	t.tcpClient.OnConnect(conn)
-	loopfunc.GoFunc(func(params ...any) {
-		t1 := time.NewTicker(time.Second)
-		t1.Stop()
-		for _, msg := range msgs {
-			if t.closed.Load() {
-				return
-			}
-			if len(msg.Data) == 0 && msg.Interval > 0 {
-				t1.Reset(msg.Interval)
-				select {
-				case <-t1.C:
-				case <-t.closeCtx.Done():
-					return
-				}
-			} else {
-				t.sendQueue.Put(msg)
-			}
-		}
-	}, "say hello", t.logg.DefaultWriter())
+	for _, msg := range msgs {
+		t.sendQueue.Put(msg)
+	}
+	// loopfunc.GoFunc(func(params ...any) {
+	// 	t1 := time.NewTicker(time.Second)
+	// 	t1.Stop()
+	// for _, msg := range msgs {
+	// 	if t.closed.Load() {
+	// 		return
+	// 	}
+	// if len(msg.Data) == 0 && msg.Interval > 0 {
+	// 	t1.Reset(msg.Interval)
+	// 	select {
+	// 	case <-t1.C:
+	// 	case <-t.closeCtx.Done():
+	// 		return
+	// 	}
+	// } else {
+	// 	t.sendQueue.Put(msg)
+	// }
+	// 	}
+	// }, "say hello", t.logg.DefaultWriter())
 }
 
 func (t *tcpCore) disconnect(s string) {
@@ -177,6 +179,19 @@ func (t *tcpCore) writeTo(target string, msgs ...*SendMessage) bool {
 	if t.tcpClient.MatchTarget(target, false) {
 		for _, msg := range msgs {
 			t.sendQueue.Put(msg)
+		}
+		return true
+	}
+	return false
+}
+
+func (t *tcpCore) writeToFront(target string, msgs ...*SendMessage) bool {
+	if t.closed.Load() {
+		return false
+	}
+	if t.tcpClient.MatchTarget(target, false) {
+		for _, msg := range msgs {
+			t.sendQueue.PutFront(msg)
 		}
 		return true
 	}
