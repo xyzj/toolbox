@@ -181,7 +181,7 @@ func TLSConfigFromPEM(certpem, keypem, rootpem []byte) (*tls.Config, error) {
 func ObfuscationString(s string) string {
 	x := byte(mrand.Int31n(126) + 1)
 	ll := len(s)
-	l := mrand.Intn(5) + 2
+	l := mrand.Intn(7) + 2
 	if ll <= l {
 		l = 2
 	}

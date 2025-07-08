@@ -27,11 +27,11 @@ type TCPManager struct {
 }
 
 func (t *TCPManager) HealthReport() map[uint64]any {
-	dis := make(map[uint64]string)
+	dis := make([]uint64, 0, t.members.Len())
 	a := make(map[uint64]any)
 	t.members.ForEachWithRLocker(func(key uint64, value *tcpCore) bool {
 		if value.closed.Load() {
-			dis[key] = ""
+			dis = append(dis, key)
 			return true
 		}
 		if time.Since(value.timeLastRead) > t.opt.readTimeout+time.Second*20 { // 读取超时，但却没有被关闭，通常为虚连接
@@ -39,7 +39,7 @@ func (t *TCPManager) HealthReport() map[uint64]any {
 			return true
 		}
 
-		if t.opt.registTimeout > 0 && time.Since(value.timeLastWrite) > t.opt.registTimeout && value.sendQueue.Len() == 0 {
+		if t.opt.registTimeout > 0 && time.Since(value.timeConnection) > t.opt.registTimeout && value.sendQueue.Len() == 0 {
 			if z, ok := value.healthReport(); !ok {
 				value.disconnect("unregistered connection")
 			} else {
@@ -52,6 +52,7 @@ func (t *TCPManager) HealthReport() map[uint64]any {
 		}
 		return true
 	})
+	t.members.DeleteMore(dis...)
 	return a
 }
 

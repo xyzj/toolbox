@@ -83,7 +83,7 @@ func OptWriteTimeout(t time.Duration) Opts {
 //	An Opts function that can be used to configure the TCPFactory with the provided registration timeout.
 func OptRegistTimeout(t time.Duration) Opts {
 	return func(o *Opt) {
-		o.registTimeout = max(t, 100000000000)
+		o.registTimeout = min(max(t, 10000000000), 100000000000)
 	}
 }
 
@@ -101,7 +101,7 @@ func OptRegistTimeout(t time.Duration) Opts {
 //	keep-alive period.
 func OptKeepAlive(t time.Duration) Opts {
 	return func(o *Opt) {
-		o.keepAlive = max(t, 100000000000)
+		o.keepAlive = min(max(t, 10000000000), 100000000000)
 	}
 }
 

@@ -38,9 +38,9 @@ type HighLowQueue[VALUE any] struct {
 func (q *HighLowQueue[VALUE]) Open() {
 	q.high = make(chan VALUE, q.max)
 	q.low = make(chan VALUE, q.max)
-	q.closed.Store(false)
 	q.lh.Store(0)
 	q.ll.Store(0)
+	q.closed.Store(false)
 }
 
 // Close closes the high-low queue by setting the closed flag to true and closing the channels for high and low priority items.

@@ -23,6 +23,7 @@ type tcpCore struct {
 	readCache          *bytes.Buffer // 数据读取临时缓存
 	tcpClient          Client        // 设备功能模块
 	logg               logger.Logger
+	timeConnection     time.Time          // 连接时间
 	timeLastWrite      time.Time          // 上次发送时间
 	timeLastRead       time.Time          // 上次数据读取时间
 	readTimeout        time.Duration      // 读取超时
@@ -45,8 +46,9 @@ func (t *tcpCore) connect(conn *net.TCPConn, msgs ...*SendMessage) {
 	t.closed.Store(false)
 	t.remoteAddr = conn.RemoteAddr().String()
 	t.closeOnce = new(sync.Once)
-	t.timeLastRead = time.Now()
-	t.timeLastWrite = time.Now()
+	t.timeConnection = time.Now()
+	t.timeLastRead = t.timeConnection
+	t.timeLastWrite = t.timeConnection
 	t.sendQueue.Open()
 	t.logg.Info(t.formatLog("new connection established"))
 	t.tcpClient.OnConnect(conn)
