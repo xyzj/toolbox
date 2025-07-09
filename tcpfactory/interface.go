@@ -6,9 +6,24 @@ import (
 	"time"
 )
 
+var shutmedown = &SendMessage{
+	Data:     []byte{0x73, 0x68, 0x75, 0x74, 0x20, 0x6d, 0x65, 0x20, 0x64, 0x6f, 0x77, 0x6e},
+	Interval: 0,
+}
+
 type SendMessage struct {
 	Data     []byte
 	Interval time.Duration
+}
+
+func TakeANap(t time.Duration) *SendMessage {
+	return &SendMessage{
+		Data:     nil,
+		Interval: t,
+	}
+}
+func ShutMeDown() *SendMessage {
+	return shutmedown
 }
 
 // Client defines the interface for handling TCP connection lifecycle and message processing.

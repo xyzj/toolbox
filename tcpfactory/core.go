@@ -17,24 +17,24 @@ import (
 )
 
 type tcpCore struct {
-	conn               *net.TCPConn // 连接实例
-	sendQueue          *queue.HighLowQueue[*SendMessage]
-	closeOnce          *sync.Once
-	readCache          *bytes.Buffer // 数据读取临时缓存
-	tcpClient          Client        // 设备功能模块
-	logg               logger.Logger
-	timeConnection     time.Time          // 连接时间
-	timeLastWrite      time.Time          // 上次发送时间
-	timeLastRead       time.Time          // 上次数据读取时间
-	readTimeout        time.Duration      // 读取超时
-	writeTimeout       time.Duration      // 发送超时
-	writeIntervalTimer *time.Timer        // 发送间隔计时
-	closeCtx           context.Context    // 关闭上下文
-	closeFunc          context.CancelFunc // 关闭事件
-	readBuffer         []byte             // 读取缓存
-	sockID             uint64             // 实例id
-	remoteAddr         string             // 远端地址
-	closed             atomic.Bool        // 是否已关闭
+	conn               *net.TCPConn                      // 连接实例
+	sendQueue          *queue.HighLowQueue[*SendMessage] // 发送队列
+	closeOnce          *sync.Once                        // 关闭事件
+	readCache          *bytes.Buffer                     // 数据读取临时缓存
+	tcpClient          Client                            // 设备功能模块
+	logg               logger.Logger                     // 日志记录
+	timeConnection     time.Time                         // 连接时间
+	timeLastWrite      time.Time                         // 上次发送时间
+	timeLastRead       time.Time                         // 上次数据读取时间
+	readTimeout        time.Duration                     // 读取超时
+	writeTimeout       time.Duration                     // 发送超时
+	writeIntervalTimer *time.Timer                       // 发送间隔计时
+	closeCtx           context.Context                   // 关闭上下文
+	closeFunc          context.CancelFunc                // 关闭事件
+	readBuffer         []byte                            // 读取缓存
+	sockID             uint64                            // 实例id
+	remoteAddr         string                            // 远端地址
+	closed             atomic.Bool                       // 是否已关闭
 }
 
 func (t *tcpCore) formatLog(s string) string {
@@ -147,6 +147,10 @@ func (t *tcpCore) send() {
 					t.disconnect("set send timeout error: " + err.Error())
 					return
 				}
+			}
+			if msg == shutmedown {
+				t.disconnect("shut me down!")
+				return
 			}
 			if len(msg.Data) > 0 {
 				_, err = t.conn.Write(msg.Data)
