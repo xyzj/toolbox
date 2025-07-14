@@ -11,7 +11,7 @@ import (
 )
 
 var defaultOpt = Opt{
-	engineFunc:   func() *gin.Engine { return gin.New() },
+	engine:       gin.New(),
 	readTimeout:  time.Second * 120,
 	writeTimeout: time.Second * 120,
 	idleTimeout:  time.Second * 60,
@@ -26,6 +26,7 @@ var defaultOpt = Opt{
 type Opt struct {
 	engineFunc   func() *gin.Engine
 	hosts        []string
+	engine       *gin.Engine
 	tlsc         *tls.Config
 	logg         logger.Logger
 	readTimeout  time.Duration
@@ -37,6 +38,11 @@ type Opt struct {
 }
 type Opts func(opt *Opt)
 
+func OptEngine(r *gin.Engine) Opts {
+	return func(opt *Opt) {
+		opt.engine = r
+	}
+}
 func OptEngineFunc(f func() *gin.Engine) Opts {
 	return func(opt *Opt) {
 		opt.engineFunc = f

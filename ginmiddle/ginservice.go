@@ -84,7 +84,10 @@ func ListenAndServeWithOption(opts ...Opts) {
 	// 路由处理
 	findRoot := false
 	findIcon := false
-	h := opt.engineFunc()
+	h := opt.engine
+	if opt.engineFunc != nil {
+		h = opt.engineFunc()
+	}
 	for _, v := range h.Routes() {
 		if v.Path == "/" {
 			findRoot = true

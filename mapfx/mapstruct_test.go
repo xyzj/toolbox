@@ -36,11 +36,11 @@ func TestStruct(t *testing.T) {
 	aa.status = true
 
 	err := a.ForEach(func(key string, value *aaa) bool {
-		println(key, fmt.Sprintf("%+v", value))
+		println(key, fmt.Sprintf("--- %+v", value))
 
 		return true
 	})
-	println(fmt.Sprintf("++%+v", err))
+	println(fmt.Sprintf("++-- %+v", err))
 	c := aaa{
 		name:   "d232",
 		count:  32,
