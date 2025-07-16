@@ -11,7 +11,6 @@ import (
 )
 
 var defaultOpt = Opt{
-	engine:       gin.New(),
 	readTimeout:  time.Second * 120,
 	writeTimeout: time.Second * 120,
 	idleTimeout:  time.Second * 60,

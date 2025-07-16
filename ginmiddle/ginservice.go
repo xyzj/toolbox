@@ -88,6 +88,9 @@ func ListenAndServeWithOption(opts ...Opts) {
 	if opt.engineFunc != nil {
 		h = opt.engineFunc()
 	}
+	if h == nil {
+		h = gin.New()
+	}
 	for _, v := range h.Routes() {
 		if v.Path == "/" {
 			findRoot = true
