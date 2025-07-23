@@ -26,6 +26,8 @@ const (
 	HEADER_VALUE_URLE    = "application/x-www-form-urlencoded"
 	HEADER_VALUE_JSON    = "application/json; charset=utf-8"
 	HEADER_VALUE_ZSTD    = "zstd"
+	LogFormater          = "[req] |%d| %-13s |%s %s > %s"
+	LogErrFormater       = "[req] |%d| %s %s > %s"
 )
 
 type HTTPOpt struct {
@@ -55,15 +57,15 @@ var defaultReqOpt = ReqOpt{timeout: time.Second * 10}
 
 type ReqOpt struct {
 	timeout time.Duration
-	notLog  bool
+	logreq  bool
 }
 type ReqOpts func(opt *ReqOpt)
 
-// OptNotLog returns a ReqOpts function that disables logging for the HTTP request.
-// When applied, the request will not be logged.
-func OptNotLog() ReqOpts {
+// OptLogReq returns a ReqOpts function that enables logging of the HTTP request.
+// When applied, it sets the logreq field of ReqOpt to true.
+func OptLogReq() ReqOpts {
 	return func(o *ReqOpt) {
-		o.notLog = true
+		o.logreq = true
 	}
 }
 
@@ -87,7 +89,7 @@ func (c *Client) ensureRequestOpts(opts ...ReqOpts) {
 		o(&opt)
 	}
 	if c.logg == nil {
-		opt.notLog = true
+		opt.logreq = false
 	}
 	c.opt = &opt
 }
@@ -135,13 +137,13 @@ func (c *Client) DoStreamRequest(req *http.Request, header func(map[string]strin
 	// Send the request with the timeout context
 	resp, err := c.client.Do(req)
 	if err != nil {
-		c.logg.Error("Request error:" + fmt.Sprintf("%s %s>%s", req.Method, req.URL.String(), err.Error()))
+		c.logg.Error(fmt.Sprintf(LogErrFormater, 500, req.Method, req.URL.String(), err.Error()))
 		return err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		b, _ := io.ReadAll(resp.Body)
-		c.logg.Error("Response status code not OK:" + fmt.Sprintf("%s %s>%d,%s", req.Method, req.URL.String(), resp.StatusCode, string(b)))
+		c.logg.Error(fmt.Sprintf(LogErrFormater, resp.StatusCode, req.Method, req.URL.String(), json.String(b)))
 		return err
 	}
 	// Return headers
@@ -213,17 +215,14 @@ func (c *Client) DoRequest(req *http.Request, opts ...ReqOpts) (int, []byte, map
 	// Send the request with the timeout context
 	resp, err := c.client.Do(req)
 	if err != nil {
-		c.logg.Error("REQ ERR:" + fmt.Sprintf("%s %s>%s", req.Method, req.URL.String(), err.Error()))
-		return 502, nil, nil, err
+		c.logg.Error(fmt.Sprintf(LogErrFormater, 500, req.Method, req.URL.String(), err.Error()))
+		return 500, nil, nil, err
 	}
 	defer resp.Body.Close()
 	sc := resp.StatusCode
-	if sc >= 400 {
-		c.logg.Warning("REQ NOT OK:" + fmt.Sprintf("%s %s>%d", req.Method, req.URL.String(), sc))
-	}
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
-		c.logg.Error("RESP READ ERR:" + fmt.Sprintf("%s %s>%s", req.Method, req.URL.String(), err.Error()))
+		c.logg.Error(fmt.Sprintf(LogErrFormater, sc, req.Method, req.URL.String(), err.Error()))
 		return sc, nil, nil, err
 	}
 
@@ -235,8 +234,8 @@ func (c *Client) DoRequest(req *http.Request, opts ...ReqOpts) (int, []byte, map
 		h[k] = resp.Header.Get(k)
 	}
 	// 日志
-	if !c.opt.notLog {
-		c.logg.Info("REQ:" + fmt.Sprintf("|%d| %-13s |%s %s>%s", sc, h[HEADER_RESP_DURATION], req.Method, req.URL.String(), json.String(b)))
+	if c.opt.logreq {
+		c.logg.Info(fmt.Sprintf(LogFormater, sc, h[HEADER_RESP_DURATION], req.Method, req.URL.String(), json.String(b)))
 	}
 	return sc, b, h, nil
 }
