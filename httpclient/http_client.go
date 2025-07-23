@@ -19,14 +19,13 @@ type HTTPClient interface {
 }
 
 const (
-	HEADER_RESP_FROM        = "Resp-From"
-	HEADER_RESP_DURATION    = "Resp-Duration"
-	HEADER_KEY_CONTENT_TYPE = "Content-Type"
-	HEADER_KEY_COMPRESSED   = "Compressed"
-	HEADER_VALUE_URLE       = "application/x-www-form-urlencoded"
-	HEADER_VALUE_JSON       = "application/json; charset=utf-8"
-	HEADER_VALUE_TEXT       = "text/html"
-	HEADER_VALUE_ZSTD       = "zstd"
+	HEADER_RESP_FROM     = "Resp-From"
+	HEADER_RESP_DURATION = "Resp-Duration"
+	HEADER_CONTENT_TYPE  = "Content-Type"
+	HEADER_COMPRESSED    = "Compressed"
+	HEADER_VALUE_URLE    = "application/x-www-form-urlencoded"
+	HEADER_VALUE_JSON    = "application/json; charset=utf-8"
+	HEADER_VALUE_ZSTD    = "zstd"
 )
 
 type HTTPOpt struct {
@@ -106,12 +105,12 @@ func (c *Client) ensureRequestOpts(opts ...ReqOpts) {
 func (c *Client) makeRequest(req *http.Request, opts ...ReqOpts) (*http.Request, context.CancelFunc) {
 	c.ensureRequestOpts(opts...)
 	// Set default content type if not provided
-	if req.Header.Get(HEADER_KEY_CONTENT_TYPE) == "" {
+	if req.Header.Get(HEADER_CONTENT_TYPE) == "" {
 		switch req.Method {
 		case "GET":
-			req.Header.Set(HEADER_KEY_CONTENT_TYPE, HEADER_VALUE_URLE)
+			req.Header.Set(HEADER_CONTENT_TYPE, HEADER_VALUE_URLE)
 		case "POST":
-			req.Header.Set(HEADER_KEY_CONTENT_TYPE, HEADER_VALUE_JSON)
+			req.Header.Set(HEADER_CONTENT_TYPE, HEADER_VALUE_JSON)
 		}
 	}
 	timeoCtx, cancel := context.WithTimeout(context.Background(), c.opt.timeout)
