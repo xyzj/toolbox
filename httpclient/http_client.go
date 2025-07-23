@@ -19,8 +19,14 @@ type HTTPClient interface {
 }
 
 const (
-	HEADER_RESP_FROM     = "Resp-From"
-	HEADER_RESP_DURATION = "Resp-Duration"
+	HEADER_RESP_FROM        = "Resp-From"
+	HEADER_RESP_DURATION    = "Resp-Duration"
+	HEADER_KEY_CONTENT_TYPE = "Content-Type"
+	HEADER_KEY_COMPRESSED   = "Compressed"
+	HEADER_VALUE_URLE       = "application/x-www-form-urlencoded"
+	HEADER_VALUE_JSON       = "application/json; charset=utf-8"
+	HEADER_VALUE_TEXT       = "text/html"
+	HEADER_VALUE_ZSTD       = "zstd"
 )
 
 type HTTPOpt struct {
@@ -29,12 +35,17 @@ type HTTPOpt struct {
 }
 type HTTPOpts func(opt *HTTPOpt)
 
+// OptTLS returns an HTTPOpts function that sets the TLS configuration for the HTTP client.
+// The provided tls.Config will be used for secure connections.
 func OptTLS(t *tls.Config) HTTPOpts {
 	return func(o *HTTPOpt) {
 		o.tls = t
 	}
 }
 
+// OptLogger returns an HTTPOpts function that sets the logger for HTTP requests.
+// It allows customization of logging behavior by injecting a logger.Logger instance
+// into the HTTP client options.
 func OptLogger(l logger.Logger) HTTPOpts {
 	return func(o *HTTPOpt) {
 		o.logg = l
@@ -49,12 +60,16 @@ type ReqOpt struct {
 }
 type ReqOpts func(opt *ReqOpt)
 
+// OptNotLog returns a ReqOpts function that disables logging for the HTTP request.
+// When applied, the request will not be logged.
 func OptNotLog() ReqOpts {
 	return func(o *ReqOpt) {
 		o.notLog = true
 	}
 }
 
+// OptTimeout returns a ReqOpts function that sets the timeout duration for an HTTP request.
+// The provided duration 't' will be applied to the ReqOpt's timeout field.
 func OptTimeout(t time.Duration) ReqOpts {
 	return func(o *ReqOpt) {
 		o.timeout = t
@@ -91,12 +106,12 @@ func (c *Client) ensureRequestOpts(opts ...ReqOpts) {
 func (c *Client) makeRequest(req *http.Request, opts ...ReqOpts) (*http.Request, context.CancelFunc) {
 	c.ensureRequestOpts(opts...)
 	// Set default content type if not provided
-	if req.Header.Get("Content-Type") == "" {
+	if req.Header.Get(HEADER_KEY_CONTENT_TYPE) == "" {
 		switch req.Method {
 		case "GET":
-			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.Header.Set(HEADER_KEY_CONTENT_TYPE, HEADER_VALUE_URLE)
 		case "POST":
-			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set(HEADER_KEY_CONTENT_TYPE, HEADER_VALUE_JSON)
 		}
 	}
 	timeoCtx, cancel := context.WithTimeout(context.Background(), c.opt.timeout)
@@ -134,7 +149,7 @@ func (c *Client) DoStreamRequest(req *http.Request, header func(map[string]strin
 	if header != nil {
 		// Collect response headers
 		h := make(map[string]string)
-		h[HEADER_RESP_FROM] = req.Host
+		h[HEADER_RESP_FROM] = req.URL.Host
 		h[HEADER_RESP_DURATION] = time.Since(start).String()
 		for k := range resp.Header {
 			h[k] = resp.Header.Get(k)
@@ -215,7 +230,7 @@ func (c *Client) DoRequest(req *http.Request, opts ...ReqOpts) (int, []byte, map
 
 	// Collect response headers
 	h := make(map[string]string)
-	h[HEADER_RESP_FROM] = req.Host
+	h[HEADER_RESP_FROM] = req.URL.Host
 	h[HEADER_RESP_DURATION] = time.Since(start).String()
 	for k := range resp.Header {
 		h[k] = resp.Header.Get(k)
@@ -227,6 +242,10 @@ func (c *Client) DoRequest(req *http.Request, opts ...ReqOpts) (int, []byte, map
 	return sc, b, h, nil
 }
 
+// New creates and returns a new HTTP client with customizable options.
+// It accepts a variadic list of HTTPOpts, which are functions that modify the default HTTPOpt configuration.
+// The returned Client is initialized with sensible defaults, including a custom TLS configuration,
+// connection pooling settings, and a logger. Options provided via HTTPOpts can override these defaults.
 func New(opts ...HTTPOpts) *Client {
 	opt := &HTTPOpt{
 		tls: &tls.Config{
