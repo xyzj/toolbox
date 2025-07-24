@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	idHash  = crypto.NewHash(crypto.HashSHA1, []byte{})
+	idHash  = crypto.NewHash(crypto.HashSHA1)
 	ssdDone = "[DONE]"
 )
 

@@ -16,7 +16,7 @@ import (
 	"github.com/xyzj/toolbox/llms/history"
 )
 
-var idHash = crypto.NewHash(crypto.HashSHA1, []byte{})
+var idHash = crypto.NewHash(crypto.HashSHA1)
 
 type ChatResponse struct {
 	Message    *llms.Message `json:"message,omitempty"`

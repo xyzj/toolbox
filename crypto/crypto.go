@@ -53,11 +53,11 @@ func (v CValue) URLBase64String() string {
 }
 
 var (
-	md5hash    = NewHash(HashMD5, nil)
-	sha1hash   = NewHash(HashSHA1, nil)
-	sha256hash = NewHash(HashSHA256, nil)
-	sha512hash = NewHash(HashSHA512, nil)
-	sm3hash    = NewHash(HashSM3, nil)
+	md5hash    = NewHash(HashMD5)
+	sha1hash   = NewHash(HashSHA1)
+	sha256hash = NewHash(HashSHA256)
+	sha512hash = NewHash(HashSHA512)
+	sm3hash    = NewHash(HashSM3)
 )
 
 type Cryptor interface {

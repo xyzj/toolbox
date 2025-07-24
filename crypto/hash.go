@@ -7,9 +7,9 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"hash"
-	"sync"
 
 	"github.com/tjfoc/gmsm/sm3"
+	gopool "github.com/xyzj/go-pool"
 )
 
 type HashType byte
@@ -31,11 +31,29 @@ const (
 	HashSM3
 )
 
+type HashOpt struct {
+	hmackey  []byte
+	poolsize int
+}
+type HashOpts func(opt *HashOpt)
+
+func HashOptPoolSize(t int) HashOpts {
+	return func(o *HashOpt) {
+		o.poolsize = t
+	}
+}
+func HashOptHMacKey(b []byte) HashOpts {
+	return func(o *HashOpt) {
+		o.hmackey = b
+	}
+}
+
 // HASH hash算法
 type HASH struct {
 	// locker   sync.Mutex
 	// hash     hash.Hash
-	pool sync.Pool
+	// pool sync.Pool
+	pool *gopool.GoPool[hash.Hash]
 	// workType HashType
 }
 
@@ -51,7 +69,7 @@ type HASH struct {
 
 // Hash 计算哈希值
 func (w *HASH) Hash(b []byte) CValue {
-	h := w.pool.Get().(hash.Hash)
+	h := w.pool.Get()
 	defer w.pool.Put(h)
 	h.Reset()
 	h.Write(b)
@@ -72,33 +90,36 @@ func (w *HASH) Hash(b []byte) CValue {
 //
 // Returns:
 // - A pointer to the newly created HASH instance.
-func NewHash(t HashType, hmacKey []byte) *HASH {
-	if hmacKey == nil {
-		hmacKey = []byte{}
+func NewHash(t HashType, opts ...HashOpts) *HASH {
+	opt := &HashOpt{
+		hmackey: []byte{},
+	}
+	for _, o := range opts {
+		o(opt)
 	}
 	return &HASH{
-		pool: sync.Pool{
-			New: func() any {
-				switch t {
-				case HashMD5:
-					return md5.New()
-				case HashHMACSHA1:
-					return hmac.New(sha1.New, hmacKey)
-				case HashHMACSHA256:
-					return hmac.New(sha256.New, hmacKey)
-				case HashSHA1:
-					return sha1.New()
-				case HashSHA256:
-					return sha256.New()
-				case HashSHA512:
-					return sha512.New()
-				case HashSM3:
-					return sm3.New()
-				default:
-					return nil
-				}
-			},
+		pool: gopool.New(func() hash.Hash {
+			switch t {
+			case HashMD5:
+				return md5.New()
+			case HashHMACSHA1:
+				return hmac.New(sha1.New, opt.hmackey)
+			case HashHMACSHA256:
+				return hmac.New(sha256.New, opt.hmackey)
+			case HashSHA1:
+				return sha1.New()
+			case HashSHA256:
+				return sha256.New()
+			case HashSHA512:
+				return sha512.New()
+			case HashSM3:
+				return sm3.New()
+			default:
+				return nil
+			}
 		},
+			gopool.OptMaxIdleSize(opt.poolsize),
+		),
 	}
 	// w := &HASH{
 	// 	locker: sync.Mutex{},

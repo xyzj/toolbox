@@ -16,6 +16,7 @@ type Opt struct {
 	helloMsg      []*SendMessage
 	bind          string
 	maxQueue      int32
+	poolSize      int32
 	multiTargets  bool
 }
 type Opts func(opt *Opt)
@@ -30,6 +31,7 @@ var defaultOpt = Opt{
 	keepAlive:     time.Second * 30,
 	helloMsg:      make([]*SendMessage, 0),
 	maxQueue:      1000,
+	poolSize:      3000,
 	multiTargets:  false,
 }
 
@@ -212,5 +214,13 @@ func OptTcpClient(t Client) Opts {
 func OptHelloMessages(t ...*SendMessage) Opts {
 	return func(o *Opt) {
 		o.helloMsg = append(o.helloMsg, t...)
+	}
+}
+
+// OptMaxClientPoolSize returns an option function that sets the maximum client pool size.
+// The pool size will be set to the greater of 2 or the provided value t.
+func OptMaxClientPoolSize(t int32) Opts {
+	return func(o *Opt) {
+		o.poolSize = max(2, t)
 	}
 }

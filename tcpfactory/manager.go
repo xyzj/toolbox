@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"net"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/xyzj/deepcopy"
+	gopool "github.com/xyzj/go-pool"
 	"github.com/xyzj/toolbox"
 	"github.com/xyzj/toolbox/loopfunc"
 	"github.com/xyzj/toolbox/mapfx"
@@ -22,7 +22,7 @@ type TCPManager struct {
 	opt      *Opt
 	listener *net.TCPListener
 	addr     *net.TCPAddr
-	recycle  sync.Pool
+	recycle  *gopool.GoPool[*tcpCore]
 	shutdown atomic.Bool
 }
 
@@ -150,7 +150,7 @@ func (t *TCPManager) Listen() error {
 				continue
 			}
 			go func(conn *net.TCPConn) {
-				cli := t.recycle.Get().(*tcpCore)
+				cli := t.recycle.Get()
 				if t.opt.keepAlive > 0 {
 					conn.SetKeepAliveConfig(net.KeepAliveConfig{
 						Enable:   true,
@@ -229,8 +229,8 @@ func NewTcpFactory(opts ...Opts) (*TCPManager, error) {
 	return &TCPManager{
 		addr: b,
 		opt:  &opt,
-		recycle: sync.Pool{
-			New: func() any {
+		recycle: gopool.New(
+			func() *tcpCore {
 				ctx, cancel := context.WithCancel(context.Background())
 				t1 := time.NewTimer(time.Minute)
 				t1.Stop()
@@ -249,7 +249,29 @@ func NewTcpFactory(opts ...Opts) (*TCPManager, error) {
 					logg:               opt.logg,
 				}
 			},
-		},
+			gopool.OptMaxIdleSize(int(opt.poolSize)),
+		),
+		// recycle: sync.Pool{
+		// 	New: func() any {
+		// 		ctx, cancel := context.WithCancel(context.Background())
+		// 		t1 := time.NewTimer(time.Minute)
+		// 		t1.Stop()
+		// 		return &tcpCore{
+		// 			sockID:             sid.Add(1),
+		// 			sendQueue:          queue.NewHighLowQueue[*SendMessage](opt.maxQueue),
+		// 			closed:             atomic.Bool{},
+		// 			readBuffer:         make([]byte, 8192),
+		// 			readCache:          &bytes.Buffer{},
+		// 			readTimeout:        opt.readTimeout,
+		// 			writeTimeout:       opt.writeTimeout,
+		// 			writeIntervalTimer: t1,
+		// 			tcpClient:          deepcopy.CopyAny(opt.client),
+		// 			closeCtx:           ctx,
+		// 			closeFunc:          cancel,
+		// 			logg:               opt.logg,
+		// 		}
+		// 	},
+		// },
 		shutdown: atomic.Bool{},
 		members:  mapfx.NewStructMap[uint64, tcpCore](),
 	}, nil

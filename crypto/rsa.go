@@ -16,9 +16,9 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"sync"
 	"time"
 
+	gopool "github.com/xyzj/go-pool"
 	"github.com/xyzj/toolbox/json"
 	"github.com/xyzj/toolbox/pathtool"
 )
@@ -32,10 +32,11 @@ var (
 
 // RSA rsa算法
 type RSA struct {
-	signHash   *HASH
-	pubKey     *rsa.PublicKey
-	priKey     *rsa.PrivateKey
-	bufpool    *sync.Pool
+	signHash *HASH
+	pubKey   *rsa.PublicKey
+	priKey   *rsa.PrivateKey
+	bufpool  *gopool.GoPool[*bytes.Buffer]
+	// bufpool    *sync.Pool
 	encodeSize int
 	decodeSize int
 	pubBytes   CValue
@@ -172,7 +173,7 @@ func (w *RSA) Encode(b []byte) (CValue, error) {
 	}
 	// max := w.pubKey.Size() / 2
 	// buf := &bytes.Buffer{}
-	buf := w.bufpool.Get().(*bytes.Buffer)
+	buf := w.bufpool.Get()
 	defer func() {
 		buf.Reset()
 		w.bufpool.Put(buf)
@@ -205,7 +206,7 @@ func (w *RSA) Decode(b []byte) (string, error) {
 	}
 	// max := w.priKey.Size()
 	// buf := &bytes.Buffer{}
-	buf := w.bufpool.Get().(*bytes.Buffer)
+	buf := w.bufpool.Get()
 	defer func() {
 		buf.Reset()
 		w.bufpool.Put(buf)
@@ -443,11 +444,14 @@ func (w *RSA) CreateCert(opt *CertOpt) error {
 func NewRSA() *RSA {
 	w := &RSA{
 		signHash: NewHash(HashSHA256, nil),
-		bufpool: &sync.Pool{
-			New: func() any {
-				return &bytes.Buffer{}
-			},
-		},
+		bufpool: gopool.New(func() *bytes.Buffer {
+			return &bytes.Buffer{}
+		}),
+		// bufpool: &sync.Pool{
+		// 	New: func() any {
+		// 		return &bytes.Buffer{}
+		// 	},
+		// },
 	}
 	return w
 }

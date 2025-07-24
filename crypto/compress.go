@@ -5,9 +5,9 @@ import (
 	"compress/gzip"
 	"compress/zlib"
 	"io"
-	"sync"
 
 	"github.com/klauspost/compress/zstd"
+	gopool "github.com/xyzj/go-pool"
 )
 
 // CompressType 压缩编码类型
@@ -18,6 +18,24 @@ const (
 	CompressGZip
 	CompressZstd
 )
+
+type CompOpt struct {
+	poolsize int
+}
+type CompOpts func(opt *CompOpt)
+
+func CompOptPoolSize(t int) CompOpts {
+	return func(o *CompOpt) {
+		o.poolsize = t
+	}
+}
+
+type enc interface {
+	Encode([]byte) ([]byte, error)
+}
+type dec interface {
+	Decode([]byte) ([]byte, error)
+}
 
 type zstdEnc struct {
 	buf   *bytes.Buffer
@@ -140,49 +158,59 @@ func (e *zlibDec) Decode(src []byte) ([]byte, error) {
 
 type Compressor struct {
 	t       CompressType
-	encpool sync.Pool
-	decpool sync.Pool
+	encpool *gopool.GoPool[enc]
+	decpool *gopool.GoPool[dec]
+	// encpool sync.Pool
+	// decpool sync.Pool
 }
 
 func (z *Compressor) Encode(src []byte) ([]byte, error) {
 	tool := z.encpool.Get()
 	defer z.encpool.Put(tool)
-	switch z.t {
-	case CompressGZip:
-		return tool.(*gzipEnc).Encode(src)
-	case CompressZlib:
-		return tool.(*zlibEnc).Encode(src)
-	default:
-		return tool.(*zstdEnc).Encode(src)
-	}
+	return tool.Encode(src)
+	// switch z.t {
+	// case CompressGZip:
+	// 	return tool.(*gzipEnc).Encode(src)
+	// case CompressZlib:
+	// 	return tool.(*zlibEnc).Encode(src)
+	// default:
+	// 	return tool.(*zstdEnc).Encode(src)
+	// }
 }
 
 func (z *Compressor) Decode(src []byte) ([]byte, error) {
 	tool := z.decpool.Get()
 	defer z.decpool.Put(tool)
-	switch z.t {
-	case CompressGZip:
-		return tool.(*gzipDec).Decode(src)
-	case CompressZlib:
-		return tool.(*zlibDec).Decode(src)
-	default:
-		return tool.(*zstdDec).Decode(src)
-	}
+	return tool.Decode(src)
+	// switch z.t {
+	// case CompressGZip:
+	// 	return tool.(*gzipDec).Decode(src)
+	// case CompressZlib:
+	// 	return tool.(*zlibDec).Decode(src)
+	// default:
+	// 	return tool.(*zstdDec).Decode(src)
+	// }
 }
 
-func NewCompressor(t CompressType) *Compressor {
-	var encnew func() any
-	var decnew func() any
+func NewCompressor(t CompressType, opts ...CompOpts) *Compressor {
+	opt := &CompOpt{
+		poolsize: 20,
+	}
+	for _, o := range opts {
+		o(opt)
+	}
+	var encnew func() enc
+	var decnew func() dec
 	switch t {
 	case CompressGZip:
-		encnew = func() any {
+		encnew = func() enc {
 			return &gzipEnc{
 				buf:   &bytes.Buffer{},
 				in:    bytes.NewReader([]byte{}),
 				coder: gzip.NewWriter(nil),
 			}
 		}
-		decnew = func() any {
+		decnew = func() dec {
 			return &gzipDec{
 				buf:   &bytes.Buffer{},
 				in:    bytes.NewReader([]byte{}),
@@ -190,14 +218,14 @@ func NewCompressor(t CompressType) *Compressor {
 			}
 		}
 	case CompressZlib:
-		encnew = func() any {
+		encnew = func() enc {
 			return &zlibEnc{
 				buf:   &bytes.Buffer{},
 				in:    bytes.NewReader([]byte{}),
 				coder: zlib.NewWriter(nil),
 			}
 		}
-		decnew = func() any {
+		decnew = func() dec {
 			dec, _ := zlib.NewReader(bytes.NewReader([]byte{}))
 			return &zlibDec{
 				buf:   &bytes.Buffer{},
@@ -206,7 +234,7 @@ func NewCompressor(t CompressType) *Compressor {
 			}
 		}
 	case CompressZstd: // zstd
-		encnew = func() any {
+		encnew = func() enc {
 			enc, _ := zstd.NewWriter(nil)
 			return &zstdEnc{
 				buf:   &bytes.Buffer{},
@@ -214,7 +242,7 @@ func NewCompressor(t CompressType) *Compressor {
 				coder: enc,
 			}
 		}
-		decnew = func() any {
+		decnew = func() dec {
 			dec, _ := zstd.NewReader(nil, zstd.WithDecoderConcurrency(0))
 			return &zstdDec{
 				buf:   &bytes.Buffer{},
@@ -222,14 +250,18 @@ func NewCompressor(t CompressType) *Compressor {
 				coder: dec,
 			}
 		}
+	default:
+		return nil
 	}
 	return &Compressor{
-		t: t,
-		encpool: sync.Pool{
-			New: encnew,
-		},
-		decpool: sync.Pool{
-			New: decnew,
-		},
+		t:       t,
+		encpool: gopool.New(encnew, gopool.OptMaxIdleSize(opt.poolsize)),
+		decpool: gopool.New(decnew, gopool.OptMaxIdleSize(opt.poolsize)),
+		// encpool: sync.Pool{
+		// 	New: encnew,
+		// },
+		// decpool: sync.Pool{
+		// 	New: decnew,
+		// },
 	}
 }
