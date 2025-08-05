@@ -272,7 +272,6 @@ func (d *Conn) queryDataChan(ctx context.Context, done context.CancelFunc, sqldb
 		}
 		done()
 	}()
-
 	if rowsCount < 0 {
 		rowsCount = 0
 	}

@@ -443,7 +443,7 @@ func (w *RSA) CreateCert(opt *CertOpt) error {
 //	签名算法采用sha256
 func NewRSA() *RSA {
 	w := &RSA{
-		signHash: NewHash(HashSHA256, nil),
+		signHash: NewHash(HashSHA256),
 		bufpool: gopool.New(func() *bytes.Buffer {
 			return &bytes.Buffer{}
 		}),

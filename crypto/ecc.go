@@ -396,7 +396,7 @@ func (w *ECC) CreateCert(opt *CertOpt) error {
 //	支持 openssl ecparam -name prime256v1/secp384r1 格式的密钥
 func NewECC() *ECC {
 	w := &ECC{
-		signHash: NewHash(HashSHA256, nil),
+		signHash: NewHash(HashSHA256),
 	}
 	return w
 }

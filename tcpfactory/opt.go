@@ -26,12 +26,12 @@ var defaultOpt = Opt{
 	client:        &EmptyClient{},
 	bind:          ":6880",
 	readTimeout:   time.Second * 100,
-	writeTimeout:  0,
+	writeTimeout:  time.Second * 10,
 	registTimeout: 0,
 	keepAlive:     time.Second * 30,
 	helloMsg:      make([]*SendMessage, 0),
-	maxQueue:      1000,
-	poolSize:      3000,
+	maxQueue:      10,
+	poolSize:      30,
 	multiTargets:  false,
 }
 

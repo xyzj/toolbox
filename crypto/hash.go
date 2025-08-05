@@ -118,7 +118,7 @@ func NewHash(t HashType, opts ...HashOpts) *HASH {
 				return nil
 			}
 		},
-			gopool.OptMaxIdleSize(opt.poolsize),
+			gopool.WithMaxPoolSize(opt.poolsize),
 		),
 	}
 	// w := &HASH{

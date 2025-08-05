@@ -119,10 +119,9 @@ type dbs struct {
 
 // Conn sql连接池
 type Conn struct {
-	cfg *Opt
-	dbs map[int]*dbs
-	// 缓存路径
-	cacheDir  string
+	cfg       *Opt
+	dbs       map[int]*dbs
+	cacheDir  string // 缓存路径
 	cacheHead string
 	defaultDB int
 	isnew     bool

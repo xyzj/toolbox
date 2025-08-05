@@ -24,7 +24,6 @@ import (
 	"unicode"
 
 	"github.com/xyzj/toolbox/crypto"
-	"github.com/xyzj/toolbox/gocmd"
 	json "github.com/xyzj/toolbox/json"
 	"github.com/xyzj/toolbox/pathtool"
 )
@@ -407,16 +406,16 @@ func RemoveUnvisiable(s string) string {
 // buildDate: build datetime
 // buildOS: platform info
 // auth: auth name
-func VersionInfo(name, ver, gover, buildDate, buildOS, auth string) string {
-	return gocmd.PrintVersion(&gocmd.VersionInfo{
-		Name:      name,
-		Version:   ver,
-		GoVersion: gover,
-		BuildDate: buildDate,
-		BuildOS:   buildOS,
-		CodeBy:    auth,
-	})
-}
+// func VersionInfo(name, ver, gover, buildDate, buildOS, auth string) string {
+// 	return gocmd.PrintVersion(&gocmd.VersionInfo{
+// 		Name:      name,
+// 		Version:   ver,
+// 		GoVersion: gover,
+// 		BuildDate: buildDate,
+// 		BuildOS:   buildOS,
+// 		CodeBy:    auth,
+// 	})
+// }
 
 // WriteVersionInfo write version info to .ver file
 //

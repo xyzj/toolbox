@@ -22,6 +22,7 @@ type TCPManager struct {
 	opt      *Opt
 	listener *net.TCPListener
 	addr     *net.TCPAddr
+	// recycle  sync.Pool
 	recycle  *gopool.GoPool[*tcpCore]
 	shutdown atomic.Bool
 }
@@ -39,7 +40,7 @@ func (t *TCPManager) HealthReport() map[uint64]any {
 			return true
 		}
 
-		if t.opt.registTimeout > 0 && time.Since(value.timeConnection) > t.opt.registTimeout && value.sendQueue.Len() == 0 {
+		if t.opt.registTimeout > 0 && time.Since(value.timeConnection) > t.opt.registTimeout { //  && value.sendQueue.Len() == 0
 			if z, ok := value.healthReport(); !ok {
 				value.disconnect("unregistered connection")
 			} else {
@@ -249,7 +250,8 @@ func NewTcpFactory(opts ...Opts) (*TCPManager, error) {
 					logg:               opt.logg,
 				}
 			},
-			gopool.OptMaxIdleSize(int(opt.poolSize)),
+			gopool.WithMaxPoolSize(int(opt.poolSize)),
+			gopool.WithWarmCount(int(opt.poolSize)/2),
 		),
 		// recycle: sync.Pool{
 		// 	New: func() any {

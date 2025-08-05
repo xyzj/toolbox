@@ -44,13 +44,14 @@ func (t *tcpCore) formatLog(s string) string {
 func (t *tcpCore) connect(conn *net.TCPConn, msgs ...*SendMessage) {
 	t.conn = conn
 	t.closed.Store(false)
-	t.remoteAddr = conn.RemoteAddr().String()
+	t.closeCtx, t.closeFunc = context.WithCancel(context.TODO())
 	t.closeOnce = new(sync.Once)
+	t.remoteAddr = conn.RemoteAddr().String()
 	t.timeConnection = time.Now()
 	t.timeLastRead = t.timeConnection
 	t.timeLastWrite = t.timeConnection
 	t.sendQueue.Open()
-	t.logg.Info(t.formatLog("new connection established"))
+	t.logg.Info(t.formatLog("new connection established with id:" + fmt.Sprintf("%d", t.sockID)))
 	t.tcpClient.OnConnect(conn)
 	for _, msg := range msgs {
 		t.sendQueue.Put(msg)
@@ -141,6 +142,9 @@ func (t *tcpCore) send() {
 	var err error
 	for !t.closed.Load() {
 		if msg, ok = t.sendQueue.Get(); ok {
+			if t.closed.Load() {
+				return
+			}
 			if t.writeTimeout > 0 {
 				err = t.conn.SetWriteDeadline(time.Now().Add(t.writeTimeout))
 				if err != nil {
@@ -168,6 +172,7 @@ func (t *tcpCore) send() {
 				case <-t.writeIntervalTimer.C:
 					continue
 				case <-t.closeCtx.Done():
+					t.disconnect("send close")
 					return
 				}
 			}

@@ -255,8 +255,8 @@ func NewCompressor(t CompressType, opts ...CompOpts) *Compressor {
 	}
 	return &Compressor{
 		t:       t,
-		encpool: gopool.New(encnew, gopool.OptMaxIdleSize(opt.poolsize)),
-		decpool: gopool.New(decnew, gopool.OptMaxIdleSize(opt.poolsize)),
+		encpool: gopool.New(encnew, gopool.WithMaxPoolSize(opt.poolsize)),
+		decpool: gopool.New(decnew, gopool.WithMaxPoolSize(opt.poolsize)),
 		// encpool: sync.Pool{
 		// 	New: encnew,
 		// },

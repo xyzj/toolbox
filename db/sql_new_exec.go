@@ -139,7 +139,6 @@ func (d *Conn) ExecPrepareByDB(dbidx int, s string, paramNum int, params ...inte
 	if l%paramNum != 0 {
 		return errors.New("not enough params")
 	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), d.cfg.Timeout)
 	defer cancel()
 	// 开启事务
