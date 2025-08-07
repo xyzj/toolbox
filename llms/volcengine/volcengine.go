@@ -148,7 +148,7 @@ func (c *Chat) Chat(message string, f func([]byte) error) error {
 			}
 		}
 		return nil
-	}, httpclient.OptTimeout(c.opt.timeout))
+	}, httpclient.WithTimeout(c.opt.timeout))
 }
 
 func (c *Chat) Stop() {

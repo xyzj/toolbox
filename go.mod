@@ -28,7 +28,6 @@ require (
 	github.com/xyzj/go-pool v0.0.0-20250805013209-fed44622b5b4
 	go.etcd.io/bbolt v1.4.0
 	go.uber.org/ratelimit v0.3.1
-	golang.org/x/net v0.42.0
 	golang.org/x/text v0.27.0
 	gopkg.in/mail.v2 v2.3.1
 	gopkg.in/yaml.v3 v3.0.1
@@ -86,6 +85,7 @@ require (
 	github.com/ugorji/go/codec v1.3.0 // indirect
 	golang.org/x/arch v0.19.0 // indirect
 	golang.org/x/crypto v0.40.0 // indirect
+	golang.org/x/net v0.42.0 // indirect
 	golang.org/x/sync v0.16.0 // indirect
 	golang.org/x/sys v0.34.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect

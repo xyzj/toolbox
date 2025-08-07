@@ -6,7 +6,7 @@ import (
 	"github.com/xyzj/toolbox/logger"
 )
 
-type Opt struct {
+type opt struct {
 	logg          logger.Logger
 	client        Client
 	readTimeout   time.Duration
@@ -19,9 +19,9 @@ type Opt struct {
 	poolSize      int32
 	multiTargets  bool
 }
-type Opts func(opt *Opt)
+type Options func(opt *opt)
 
-var defaultOpt = Opt{
+var defaultOpt = opt{
 	logg:          logger.NewConsoleLogger(),
 	client:        &EmptyClient{},
 	bind:          ":6880",
@@ -35,13 +35,13 @@ var defaultOpt = Opt{
 	multiTargets:  false,
 }
 
-func OptBindAddr(s string) Opts {
-	return func(o *Opt) {
+func WithBindAddr(s string) Options {
+	return func(o *opt) {
 		o.bind = s
 	}
 }
 
-// OptReadTimeout is an option function for the TCPFactory that sets the read timeout for client connections.
+// WithReadTimeout is an option function for the TCPFactory that sets the read timeout for client connections.
 // The provided duration is clamped to a minimum of 1 second and a maximum of 100 minutes.
 //
 // Parameters:
@@ -51,13 +51,13 @@ func OptBindAddr(s string) Opts {
 // Returns:
 //
 //	An Opts function that can be used to configure the TCPFactory with the provided read timeout.
-func OptReadTimeout(t time.Duration) Opts {
-	return func(o *Opt) {
+func WithReadTimeout(t time.Duration) Options {
+	return func(o *opt) {
 		o.readTimeout = min(max(t, 1000000000), 6000000000000) // 1s～100m
 	}
 }
 
-// OptWriteTimeout is an option function for the TCPFactory that sets the write timeout for client connections.
+// WithWriteTimeout is an option function for the TCPFactory that sets the write timeout for client connections.
 // The provided duration is clamped to a minimum of 0 and a maximum of 1 minute.
 //
 // Parameters:
@@ -67,13 +67,13 @@ func OptReadTimeout(t time.Duration) Opts {
 // Returns:
 //
 //	An Opts function that can be used to configure the TCPFactory with the provided write timeout.
-func OptWriteTimeout(t time.Duration) Opts {
-	return func(o *Opt) {
+func WithWriteTimeout(t time.Duration) Options {
+	return func(o *opt) {
 		o.writeTimeout = min(max(t, 0), 60000000000) // 0~1m
 	}
 }
 
-// OptRegistTimeout is an option function for the TCPFactory that sets the registration timeout for client connections.
+// WithRegistTimeout is an option function for the TCPFactory that sets the registration timeout for client connections.
 // The provided duration is clamped to a minimum of 10 seconds.
 //
 // Parameters:
@@ -83,13 +83,13 @@ func OptWriteTimeout(t time.Duration) Opts {
 // Returns:
 //
 //	An Opts function that can be used to configure the TCPFactory with the provided registration timeout.
-func OptRegistTimeout(t time.Duration) Opts {
-	return func(o *Opt) {
+func WithRegistTimeout(t time.Duration) Options {
+	return func(o *opt) {
 		o.registTimeout = min(max(t, 10000000000), 100000000000)
 	}
 }
 
-// OptKeepAlive is an option function for the TCPFactory that sets the keep-alive
+// WithKeepAlive is an option function for the TCPFactory that sets the keep-alive
 // period for client connections. The provided duration is clamped to a minimum of
 // 10 seconds.
 //
@@ -101,13 +101,13 @@ func OptRegistTimeout(t time.Duration) Opts {
 //
 //	An Opts function that can be used to configure the TCPFactory with the provided
 //	keep-alive period.
-func OptKeepAlive(t time.Duration) Opts {
-	return func(o *Opt) {
+func WithKeepAlive(t time.Duration) Options {
+	return func(o *opt) {
 		o.keepAlive = min(max(t, 10000000000), 100000000000)
 	}
 }
 
-// OptLogger is an option function for the TCPFactory that allows setting a custom logger.
+// WithLogger is an option function for the TCPFactory that allows setting a custom logger.
 // If no logger is provided, it defaults to a console logger.
 //
 // The function accepts a single parameter:
@@ -119,15 +119,15 @@ func OptKeepAlive(t time.Duration) Opts {
 // Example usage:
 //
 //	factory := NewTCPFactory(
-//		OptLogger(&CustomLogger{}),
+//		WithLogger(&CustomLogger{}),
 //	)
-func OptLogger(l logger.Logger) Opts {
-	return func(o *Opt) {
+func WithLogger(l logger.Logger) Options {
+	return func(o *opt) {
 		o.logg = l
 	}
 }
 
-// OptMaxSendQueue is an option function for the TCPFactory that allows setting
+// WithMaxSendQueue is an option function for the TCPFactory that allows setting
 // the maximum size of the send queue for each client connection.
 //
 // The function accepts a single parameter:
@@ -140,15 +140,15 @@ func OptLogger(l logger.Logger) Opts {
 // Example usage:
 //
 //	factory := NewTCPFactory(
-//		OptMaxSendQueue(20000),
+//		WithMaxSendQueue(20000),
 //	)
-func OptMaxSendQueue(l int32) Opts {
-	return func(o *Opt) {
+func WithMaxSendQueue(l int32) Options {
+	return func(o *opt) {
 		o.maxQueue = max(l, 10000)
 	}
 }
 
-// OptMatchMultiTargets is an option function for the TCPFactory that allows setting
+// WithMatchMultiTargets is an option function for the TCPFactory that allows setting
 // whether the factory should match messages to multiple targets or not.
 //
 // The function accepts a single parameter:
@@ -162,15 +162,15 @@ func OptMaxSendQueue(l int32) Opts {
 // Example usage:
 //
 //	factory := NewTCPFactory(
-//		OptMatchMultiTargets(true),
+//		WithMatchMultiTargets(true),
 //	)
-func OptMatchMultiTargets(l bool) Opts {
-	return func(o *Opt) {
+func WithMatchMultiTargets(l bool) Options {
+	return func(o *opt) {
 		o.multiTargets = l
 	}
 }
 
-// OptTcpClient is an option function for the TCPFactory that allows setting a custom
+// WithTcpClient is an option function for the TCPFactory that allows setting a custom
 // TCPFactory implementation. If no TCPFactory is provided, it defaults to an EmptyTCP.
 //
 // The function accepts a single parameter:
@@ -182,10 +182,10 @@ func OptMatchMultiTargets(l bool) Opts {
 // Example usage:
 //
 //	factory := NewTCPFactory(
-//		OptTcpClient(&CustomTCPFactory{}),
+//		WithTcpClient(&CustomTCPFactory{}),
 //	)
-func OptTcpClient(t Client) Opts {
-	return func(o *Opt) {
+func WithTcpClient(t Client) Options {
+	return func(o *opt) {
 		if t == nil {
 			o.client = &EmptyClient{}
 		} else {
@@ -194,7 +194,7 @@ func OptTcpClient(t Client) Opts {
 	}
 }
 
-// OptHelloMessages is an option function for the TCPFactory that allows setting
+// WithHelloMessages is an option function for the TCPFactory that allows setting
 // custom hello messages to be sent to the connected clients.
 //
 // The function accepts a variadic number of pointers to SendMessage structs.
@@ -206,21 +206,21 @@ func OptTcpClient(t Client) Opts {
 // Example usage:
 //
 //	factory := NewTCPFactory(
-//		OptHelloMessages(
+//		WithHelloMessages(
 //			&SendMessage{Data: []byte("Hello, client 1")},
 //			&SendMessage{Data: []byte("Hello, client 2")},
 //		),
 //	)
-func OptHelloMessages(t ...*SendMessage) Opts {
-	return func(o *Opt) {
+func WithHelloMessages(t ...*SendMessage) Options {
+	return func(o *opt) {
 		o.helloMsg = append(o.helloMsg, t...)
 	}
 }
 
-// OptMaxClientPoolSize returns an option function that sets the maximum client pool size.
+// WithMaxClientPoolSize returns an option function that sets the maximum client pool size.
 // The pool size will be set to the greater of 2 or the provided value t.
-func OptMaxClientPoolSize(t int32) Opts {
-	return func(o *Opt) {
+func WithMaxClientPoolSize(t int32) Options {
+	return func(o *opt) {
 		o.poolSize = max(2, t)
 	}
 }

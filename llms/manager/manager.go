@@ -50,7 +50,7 @@ func (m *ChatManager) Store(chat llms.Chat) {
 	m.chats.Store(chat.ID(), chat)
 }
 
-func (m *ChatManager) Chat(id, message string, f func([]byte) error, opts ...httpclient.ReqOpts) error {
+func (m *ChatManager) Chat(id, message string, f func([]byte) error, opts ...httpclient.ReqOptions) error {
 	chat, ok := m.chats.Load(id)
 	if !ok {
 		return errors.New("chat not found")

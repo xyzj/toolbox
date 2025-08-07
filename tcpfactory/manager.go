@@ -14,12 +14,11 @@ import (
 	"github.com/xyzj/toolbox/loopfunc"
 	"github.com/xyzj/toolbox/mapfx"
 	"github.com/xyzj/toolbox/queue"
-	"golang.org/x/net/context"
 )
 
 type TCPManager struct {
 	members  *mapfx.StructMap[uint64, tcpCore]
-	opt      *Opt
+	opt      *opt
 	listener *net.TCPListener
 	addr     *net.TCPAddr
 	// recycle  sync.Pool
@@ -217,7 +216,7 @@ func (t *TCPManager) Len() int {
 // Return:
 // - A pointer to the created TCPManager instance.
 // - An error if any, otherwise nil.
-func NewTcpFactory(opts ...Opts) (*TCPManager, error) {
+func NewTcpFactory(opts ...Options) (*TCPManager, error) {
 	opt := defaultOpt
 	for _, o := range opts {
 		o(&opt)
@@ -232,7 +231,6 @@ func NewTcpFactory(opts ...Opts) (*TCPManager, error) {
 		opt:  &opt,
 		recycle: gopool.New(
 			func() *tcpCore {
-				ctx, cancel := context.WithCancel(context.Background())
 				t1 := time.NewTimer(time.Minute)
 				t1.Stop()
 				return &tcpCore{
@@ -245,8 +243,6 @@ func NewTcpFactory(opts ...Opts) (*TCPManager, error) {
 					writeTimeout:       opt.writeTimeout,
 					writeIntervalTimer: t1,
 					tcpClient:          deepcopy.CopyAny(opt.client),
-					closeCtx:           ctx,
-					closeFunc:          cancel,
 					logg:               opt.logg,
 				}
 			},

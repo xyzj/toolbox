@@ -44,7 +44,7 @@ func (t *tcpCore) formatLog(s string) string {
 func (t *tcpCore) connect(conn *net.TCPConn, msgs ...*SendMessage) {
 	t.conn = conn
 	t.closed.Store(false)
-	t.closeCtx, t.closeFunc = context.WithCancel(context.TODO())
+	t.closeCtx, t.closeFunc = context.WithCancel(context.Background())
 	t.closeOnce = new(sync.Once)
 	t.remoteAddr = conn.RemoteAddr().String()
 	t.timeConnection = time.Now()

@@ -45,36 +45,36 @@ func NewConsoleWriter() io.Writer {
 // NewWriter 一个新的log写入器
 //
 // opt: 日志写入器配置
-func NewWriter(opts ...Opts) io.Writer {
-	opt := &Opt{
-		FileDir: pathtool.GetExecDir(),
+func NewWriter(opts ...Options) io.Writer {
+	opt := &opt{
+		filedir: pathtool.GetExecDir(),
 	}
 	for _, o := range opts {
 		o(opt)
 	}
-	if opt.Filename == "" {
+	if opt.filename == "" {
 		return NewConsoleWriter()
 	}
 	t := time.Now()
 	mylog := &Writer{
 		// out:          os.Stdout,
-		expired:      int64(opt.FileDays)*24*60*60 - 10,
-		fileFileSize: opt.FileSize,
-		fname:        opt.Filename,
-		rollfile:     opt.AutoRoll,
+		expired:      int64(opt.filedays)*24*60*60 - 10,
+		fileFileSize: opt.filesize,
+		fname:        opt.filename,
+		rollfile:     opt.autoroll,
 		fileDay:      t.Day(),
 		fileHour:     t.Hour(),
-		logDir:       opt.FileDir,
+		logDir:       opt.filedir,
 		// chanGoWrite:  make(chan []byte, 2000),
-		enablegz: opt.CompressFile,
-		withFile: opt.Filename != "",
+		enablegz: opt.compressfile,
+		withFile: opt.filename != "",
 		// delayWrite:   opt.DelayWrite,
 		timeFormat: LongTimeFormat,
 	}
-	if opt.AutoRoll {
+	if opt.autoroll {
 		mylog.timeFormat = ShortTimeFormat
 	}
-	if opt.Filename != "" && opt.AutoRoll {
+	if opt.filename != "" && opt.autoroll {
 		ymd := t.Format(fileTimeFormat)
 		for i := byte(255); i > 0; i-- {
 			if pathtool.IsExist(filepath.Join(mylog.logDir, fmt.Sprintf("%s.%s.%d.log", mylog.fname, ymd, i))) {

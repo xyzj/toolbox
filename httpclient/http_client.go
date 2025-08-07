@@ -14,8 +14,8 @@ import (
 )
 
 type HTTPClient interface {
-	DoRequest(*http.Request, ...ReqOpts) (int, []byte, map[string]string, error)
-	DoStreamRequest(*http.Request, func(map[string]string), func([]byte) bool, ...ReqOpts) error
+	DoRequest(*http.Request, ...ReqOptions) (int, []byte, map[string]string, error)
+	DoStreamRequest(*http.Request, func(map[string]string), func([]byte) bool, ...ReqOptions) error
 }
 
 const (
@@ -30,49 +30,49 @@ const (
 	LogErrFormater       = "[req] |%d| %s %s > %s"
 )
 
-type HTTPOpt struct {
+type httpOpt struct {
 	tls  *tls.Config
 	logg logger.Logger
 }
-type HTTPOpts func(opt *HTTPOpt)
+type HTTPOptions func(opt *httpOpt)
 
-// OptTLS returns an HTTPOpts function that sets the TLS configuration for the HTTP client.
+// WithTLS returns an HTTPOptions function that sets the TLS configuration for the HTTP client.
 // The provided tls.Config will be used for secure connections.
-func OptTLS(t *tls.Config) HTTPOpts {
-	return func(o *HTTPOpt) {
+func WithTLS(t *tls.Config) HTTPOptions {
+	return func(o *httpOpt) {
 		o.tls = t
 	}
 }
 
-// OptLogger returns an HTTPOpts function that sets the logger for HTTP requests.
+// WithLogger returns an HTTPOptions function that sets the logger for HTTP requests.
 // It allows customization of logging behavior by injecting a logger.Logger instance
 // into the HTTP client options.
-func OptLogger(l logger.Logger) HTTPOpts {
-	return func(o *HTTPOpt) {
+func WithLogger(l logger.Logger) HTTPOptions {
+	return func(o *httpOpt) {
 		o.logg = l
 	}
 }
 
-var defaultReqOpt = ReqOpt{timeout: time.Second * 10}
+var defaultReqOpt = reqOptions{timeout: time.Second * 10}
 
-type ReqOpt struct {
+type reqOptions struct {
 	timeout time.Duration
 	logreq  bool
 }
-type ReqOpts func(opt *ReqOpt)
+type ReqOptions func(opt *reqOptions)
 
-// OptLogReq returns a ReqOpts function that enables logging of the HTTP request.
-// When applied, it sets the logreq field of ReqOpt to true.
-func OptLogReq() ReqOpts {
-	return func(o *ReqOpt) {
+// WithLogRequest returns a ReqOptions function that enables logging of the HTTP request.
+// When applied, it sets the logreq field of ReqOptions to true.
+func WithLogRequest() ReqOptions {
+	return func(o *reqOptions) {
 		o.logreq = true
 	}
 }
 
-// OptTimeout returns a ReqOpts function that sets the timeout duration for an HTTP request.
-// The provided duration 't' will be applied to the ReqOpt's timeout field.
-func OptTimeout(t time.Duration) ReqOpts {
-	return func(o *ReqOpt) {
+// WithTimeout returns a ReqOptions function that sets the timeout duration for an HTTP request.
+// The provided duration 't' will be applied to the ReqOptions's timeout field.
+func WithTimeout(t time.Duration) ReqOptions {
+	return func(o *reqOptions) {
 		o.timeout = t
 	}
 }
@@ -80,10 +80,10 @@ func OptTimeout(t time.Duration) ReqOpts {
 type Client struct {
 	client *http.Client
 	logg   logger.Logger
-	opt    *ReqOpt
+	opt    *reqOptions
 }
 
-func (c *Client) ensureRequestOpts(opts ...ReqOpts) {
+func (c *Client) ensureRequestOpts(opts ...ReqOptions) {
 	opt := defaultReqOpt
 	for _, o := range opts {
 		o(&opt)
@@ -104,7 +104,7 @@ func (c *Client) ensureRequestOpts(opts ...ReqOpts) {
 // Return values:
 // - *http.Request: The modified http.Request object with applied options and a timeout context.
 // - context.CancelFunc: A function to cancel the timeout context.
-func (c *Client) makeRequest(req *http.Request, opts ...ReqOpts) (*http.Request, context.CancelFunc) {
+func (c *Client) makeRequest(req *http.Request, opts ...ReqOptions) (*http.Request, context.CancelFunc) {
 	c.ensureRequestOpts(opts...)
 	// Set default content type if not provided
 	if req.Header.Get(HEADER_CONTENT_TYPE) == "" {
@@ -130,7 +130,7 @@ func (c *Client) makeRequest(req *http.Request, opts ...ReqOpts) (*http.Request,
 //
 // Return value:
 // - An error if any occurred during the request or response handling.
-func (c *Client) DoStreamRequest(req *http.Request, header func(map[string]string), recv func([]byte) error, opts ...ReqOpts) error {
+func (c *Client) DoStreamRequest(req *http.Request, header func(map[string]string), recv func([]byte) error, opts ...ReqOptions) error {
 	req, cancel := c.makeRequest(req, opts...)
 	defer cancel()
 	start := time.Now()
@@ -208,7 +208,7 @@ func (c *Client) DoStreamRequest(req *http.Request, header func(map[string]strin
 // - body: The response body as a byte slice.
 // - headers: The response headers as a map of strings.
 // - err: Any error encountered during the request or response handling.
-func (c *Client) DoRequest(req *http.Request, opts ...ReqOpts) (int, []byte, map[string]string, error) {
+func (c *Client) DoRequest(req *http.Request, opts ...ReqOptions) (int, []byte, map[string]string, error) {
 	req, cancel := c.makeRequest(req, opts...)
 	defer cancel()
 	start := time.Now()
@@ -244,8 +244,8 @@ func (c *Client) DoRequest(req *http.Request, opts ...ReqOpts) (int, []byte, map
 // It accepts a variadic list of HTTPOpts, which are functions that modify the default HTTPOpt configuration.
 // The returned Client is initialized with sensible defaults, including a custom TLS configuration,
 // connection pooling settings, and a logger. Options provided via HTTPOpts can override these defaults.
-func New(opts ...HTTPOpts) *Client {
-	opt := &HTTPOpt{
+func New(opts ...HTTPOptions) *Client {
+	opt := &httpOpt{
 		tls: &tls.Config{
 			InsecureSkipVerify: true,
 		},

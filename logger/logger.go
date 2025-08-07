@@ -112,7 +112,7 @@ func (l *StdLogger) SetLevel(ll LogLevel) {
 // logDays 日志文件保留天数
 //
 // delayWrite 是否延迟写入，在日志密集时，可减少磁盘io，但可能导致日志丢失
-func NewLogger(l LogLevel, opts ...Opts) Logger {
+func NewLogger(l LogLevel, opts ...Options) Logger {
 	return &StdLogger{
 		out:      NewWriter(opts...),
 		logLevel: l,
