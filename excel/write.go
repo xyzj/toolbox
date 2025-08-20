@@ -217,6 +217,82 @@ func NewExcelFromBinary(bs []byte, filename string) (*FileData, error) {
 	return fd, err
 }
 
+// Merge 合并单元格（适配Row方法返回错误的情况，增加值一致性校验）
+// 参数：startRow（起始行）、startCol（起始列）、endRow（结束行）、endCol（结束列）
+// 行和列均从0开始
+func (fd *FileData) Merge(startRow, startCol, endRow, endCol int) error {
+	// 校验sheet是否存在
+	if fd.writeSheet == nil {
+		return fmt.Errorf("未创建sheet，请先AddRow或SetColume")
+	}
+
+	// 校验范围合法性
+	if startRow > endRow || startCol > endCol {
+		return fmt.Errorf("合并范围无效：起始不能大于结束")
+	}
+	if startRow == endRow && startCol == endCol {
+		return nil // 单个单元格无需合并
+	}
+
+	// 1. 获取左上角单元格（基准值）
+	topLeftRow, err := fd.writeSheet.Row(startRow)
+	if err != nil {
+		return fmt.Errorf("获取起始行%d失败：%w", startRow, err)
+	}
+	topLeftCell := topLeftRow.GetCell(startCol) // 假设Cell方法安全返回单元格（不存在则创建）
+	topLeftValue := topLeftCell.Value
+
+	// 2. 值一致性校验（遍历合并范围）
+	for r := startRow; r <= endRow; r++ {
+		// 获取当前行，处理可能的错误
+		row, err := fd.writeSheet.Row(r)
+		if err != nil {
+			return fmt.Errorf("获取行%d失败：%w", r, err)
+		}
+
+		for c := startCol; c <= endCol; c++ {
+			// 跳过左上角单元格
+			if r == startRow && c == startCol {
+				continue
+			}
+
+			// 获取当前单元格（假设Cell方法自动创建不存在的单元格）
+			cell := row.GetCell(c)
+			// 检查值是否一致（非空且不等于基准值则报错）
+			if cell.Value != "" && cell.Value != topLeftValue {
+				return fmt.Errorf("合并失败：单元格(%d,%d)值为「%s」，与左上角(%d,%d)的「%s」不一致",
+					r, c, cell.Value, startRow, startCol, topLeftValue)
+			}
+		}
+	}
+
+	// 3. 执行合并：设置左上角单元格的合并属性
+	topLeftCell.HMerge = endCol - startCol
+	topLeftCell.VMerge = endRow - startRow
+
+	// 4. 清空合并范围内其他单元格的值
+	for r := startRow; r <= endRow; r++ {
+		row, err := fd.writeSheet.Row(r)
+		if err != nil {
+			return fmt.Errorf("获取行%d失败：%w", r, err)
+		}
+
+		for c := startCol; c <= endCol; c++ {
+			if r == startRow && c == startCol {
+				continue // 跳过左上角
+			}
+
+			cell := row.GetCell(c)
+			cell.SetValue("") // 清空值
+			// 保持样式一致（可选）
+			if fd.colStyle != nil {
+				cell.SetStyle(fd.colStyle)
+			}
+		}
+	}
+
+	return nil
+}
 func NewExcelFromUpload(file multipart.File, filename string) (*FileData, error) {
 	fb, err := io.ReadAll(file)
 	if err != nil {

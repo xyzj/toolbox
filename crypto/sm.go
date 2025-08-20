@@ -244,6 +244,15 @@ func (w *SM2) VerifySignFromBase64(signature string, data []byte) (bool, error) 
 	return w.VerifySign(bb, data)
 }
 
+// VerifySignFromURLBase64 验证url safe 格式的base64数据签名
+func (w *SM2) VerifySignFromURLBase64(signature string, data []byte) (bool, error) {
+	bb, err := base64.URLEncoding.DecodeString(signature)
+	if err != nil {
+		return false, err
+	}
+	return w.VerifySign(bb, data)
+}
+
 // VerifySignFromHex 验证hexstring格式的签名
 func (w *SM2) VerifySignFromHex(signature string, data []byte) (bool, error) {
 	bb, err := hex.DecodeString(signature)

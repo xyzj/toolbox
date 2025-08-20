@@ -2,11 +2,15 @@
 package ginmiddleware
 
 import (
+	"embed"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -200,4 +204,31 @@ func bindHosts(hosts ...string) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusForbidden, c.Keys)
 		}
 	}
+}
+
+// AddLocalWWW serves static files from either a local directory or an embedded filesystem on the specified Gin engine.
+// If src is nil, it serves files from the local directory specified by root using gin.Engine.Static.
+// If src is not nil, it serves files from the embedded filesystem under the given root using gin.Engine.StaticFS.
+// The relativePath parameter specifies the URL path at which the files will be served.
+// Returns an error if any required parameter is missing or if the embedded filesystem cannot be accessed.
+func AddLocalWWW(relativePath, root string, r *gin.Engine, src *embed.FS) error {
+	if relativePath == "" || root == "" {
+		return errors.New("relativePath or root is empty")
+	}
+	if r == nil {
+		return errors.New("gin.Engine is nil")
+	}
+	if src == nil {
+		r.Static(relativePath, root)
+		return nil
+	}
+	if !strings.HasPrefix(relativePath, "/") {
+		relativePath = "/" + relativePath
+	}
+	st, err := fs.Sub(src, root)
+	if err != nil {
+		return err
+	}
+	r.StaticFS(relativePath, http.FS(st))
+	return nil
 }
