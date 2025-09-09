@@ -131,26 +131,26 @@ func (c *Client) makeRequest(req *http.Request, opts ...ReqOptions) (*http.Reque
 // Return value:
 // - An error if any occurred during the request or response handling.
 func (c *Client) DoStreamRequest(req *http.Request, header func(map[string]string), recv func([]byte) error, opts ...ReqOptions) error {
-	req, cancel := c.makeRequest(req, opts...)
+	req1, cancel := c.makeRequest(req, opts...)
 	defer cancel()
 	start := time.Now()
 	// Send the request with the timeout context
-	resp, err := c.client.Do(req)
+	resp, err := c.client.Do(req1)
 	if err != nil {
-		c.logg.Error(fmt.Sprintf(LogErrFormater, 500, req.Method, req.URL.String(), err.Error()))
+		c.logg.Error(fmt.Sprintf(LogErrFormater, 500, req1.Method, req1.URL.String(), err.Error()))
 		return err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
 		b, _ := io.ReadAll(resp.Body)
-		c.logg.Error(fmt.Sprintf(LogErrFormater, resp.StatusCode, req.Method, req.URL.String(), json.String(b)))
+		c.logg.Error(fmt.Sprintf(LogErrFormater, resp.StatusCode, req1.Method, req1.URL.String(), json.String(b)))
 		return err
 	}
 	// Return headers
 	if header != nil {
 		// Collect response headers
 		h := make(map[string]string)
-		h[HEADER_RESP_FROM] = req.URL.Host
+		h[HEADER_RESP_FROM] = req1.URL.Host
 		h[HEADER_RESP_DURATION] = time.Since(start).String()
 		for k := range resp.Header {
 			h[k] = resp.Header.Get(k)

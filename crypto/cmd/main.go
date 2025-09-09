@@ -55,6 +55,10 @@ func main() {
 	case "sm2":
 		ec := crypto.NewSM2()
 		err = ec.CreateCert(cf)
+		if err != nil {
+			println("create sm2-cert error: " + err.Error())
+			return
+		}
 	case "ecc384":
 		ec := crypto.NewECC()
 		err = ec.CreateCert(cf)

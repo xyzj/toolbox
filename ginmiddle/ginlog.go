@@ -13,6 +13,8 @@ import (
 	"github.com/xyzj/toolbox/loopfunc"
 )
 
+const logStr = "|%3d |%-13s|%-15s|%-4s %s |%s"
+
 type logParam struct {
 	timer      time.Duration
 	keys       map[string]any
@@ -35,7 +37,7 @@ func LogToWriter(w io.Writer, skippath ...string) gin.HandlerFunc {
 	if len(skippath) == 0 {
 		skippath = []string{"/favicon.ico", "/showroutes", "/static"}
 	}
-	go loopfunc.LoopFunc(func(params ...interface{}) {
+	go loopfunc.LoopFunc(func(params ...any) {
 		for a := range chanlog {
 			if len(a.keys) > 0 {
 				a.jsn, _ = json.Marshal(a.keys)
@@ -50,10 +52,10 @@ func LogToWriter(w io.Writer, skippath ...string) gin.HandlerFunc {
 			if a.body != "" {
 				a.path += " |" + a.body
 			}
-			s := fmt.Sprintf("|%3d |%-13s|%-15s|%-4s %s |%s", a.statusCode, a.timer, a.clientIP, a.method, a.path, a.jsn)
-			w.Write(json.Bytes(s))
+			s := fmt.Appendf([]byte{}, logStr, a.statusCode, a.timer, a.clientIP, a.method, a.path, a.jsn)
+			w.Write(s)
 			if gin.IsDebugging() {
-				println(time.Now().Format(logger.ShortTimeFormat) + s)
+				println(time.Now().Format(logger.ShortTimeFormat) + json.String(s))
 			}
 		}
 	}, "http log", w)

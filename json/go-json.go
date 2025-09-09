@@ -1,6 +1,9 @@
 package json
 
-import json "github.com/goccy/go-json"
+import (
+	// json "encoding/json/v2"
+	json "github.com/goccy/go-json"
+)
 
 var (
 	// Valid 验证

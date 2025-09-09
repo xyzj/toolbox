@@ -84,6 +84,14 @@ type CertOpt struct {
 	RootCa string `json:"root-ca"`
 	// 输出目录
 	OutPut string `json:"-"`
+	// 组织
+	Organization string `json:"organization"`
+	// 国家
+	Country string `json:"country"`
+	// 省份
+	Province string `json:"province"`
+	// 城市
+	Locality string `json:"locality"`
 }
 
 // GetMD5 生成md5字符串
