@@ -265,6 +265,7 @@ func (r *Recorder) BuildLines(width string, js []*procStatus) []byte {
 		Formatter:   "{value} MB",
 		Align:       "right",
 	})
+	op := float32(0.3)
 	lineMem.SetXAxis(x)
 	lineMem.AddSeries("rss", rss, charts.WithLineChartOpts(
 		opts.LineChart{
@@ -274,7 +275,7 @@ func (r *Recorder) BuildLines(width string, js []*procStatus) []byte {
 		charts.WithLineStyleOpts(opts.LineStyle{
 			Width: 2,
 		}), charts.WithAreaStyleOpts(opts.AreaStyle{
-			Opacity: 0.3,
+			Opacity: &op,
 		}))
 	lineMem.AddSeries("vms", vms, charts.WithLineChartOpts(
 		opts.LineChart{
@@ -295,9 +296,10 @@ func (r *Recorder) BuildLines(width string, js []*procStatus) []byte {
 		Formatter:   "{value}",
 		Align:       "left",
 	})
+	op = float32(0.2)
 	lineOfd.SetXAxis(x)
 	lineOfd.SetSeriesOptions(SetupLineSOpts(charts.WithAreaStyleOpts(opts.AreaStyle{
-		Opacity: 0.2,
+		Opacity: &op,
 	}))...)
 	lineOfd.AddSeries("ofd", ofd)
 	lineOfd.AddSeries("conn", con)
@@ -322,9 +324,10 @@ func (r *Recorder) BuildLines(width string, js []*procStatus) []byte {
 		Formatter:   "{value} MB",
 		Align:       "right",
 	})
+	op = float32(0.3)
 	lineIO.SetXAxis(x)
 	lineIO.SetSeriesOptions(SetupLineSOpts(charts.WithAreaStyleOpts(opts.AreaStyle{
-		Opacity: 0.3,
+		Opacity: &op,
 	}))...)
 	lineIO.AddSeries("read", ior, charts.WithLineChartOpts(
 		opts.LineChart{

@@ -8,7 +8,7 @@ require (
 	github.com/gin-contrib/cors v1.7.2
 	github.com/gin-gonic/gin v1.10.1
 	github.com/go-co-op/gocron/v2 v2.16.1
-	github.com/go-echarts/go-echarts/v2 v2.4.3
+	github.com/go-echarts/go-echarts/v2 v2.6.2
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/goccy/go-json v0.10.5
 	github.com/google/uuid v1.6.0
