@@ -33,12 +33,12 @@ var (
 
 func NewConsoleWriter() io.Writer {
 	w := &Writer{
-		timeFormat: LongTimeFormat,
-		fno:        os.Stdout,
-		// chanGoWrite: make(chan []byte, 2000),
+		timeFormat:  LongTimeFormat,
+		fno:         os.Stdout,
+		chanGoWrite: make(chan *logData, 2000),
 		// out:        os.Stdout,
 	}
-	// w.startWrite()
+	w.startWrite()
 	return w
 }
 
@@ -65,11 +65,10 @@ func NewWriter(opts ...Options) io.Writer {
 		fileDay:      t.Day(),
 		fileHour:     t.Hour(),
 		logDir:       opt.filedir,
-		// chanGoWrite:  make(chan []byte, 2000),
-		enablegz: opt.compressfile,
-		withFile: opt.filename != "",
-		// delayWrite:   opt.DelayWrite,
-		timeFormat: LongTimeFormat,
+		chanGoWrite:  make(chan *logData, 2000),
+		enablegz:     opt.compressfile,
+		withFile:     opt.filename != "",
+		timeFormat:   LongTimeFormat,
 	}
 	if opt.autoroll {
 		mylog.timeFormat = ShortTimeFormat
@@ -96,8 +95,7 @@ func NewWriter(opts ...Options) io.Writer {
 
 // Writer 自定义Writer
 type Writer struct {
-	// chanGoWrite chan []byte
-	// out          io.Writer
+	chanGoWrite  chan *logData
 	fno          *os.File
 	pathNow      string
 	fname        string
@@ -115,15 +113,34 @@ type Writer struct {
 	withFile     bool
 	// delayWrite   bool
 }
+type logData struct {
+	t string
+	d []byte
+}
 
-// Write 异步写入日志，返回固定为 0, nil
-func (w *Writer) Write(p []byte) (n int, err error) {
-	xp := json.Bytes(time.Now().Format(w.timeFormat))
-	xp = append(xp, p...)
+func (l *logData) Bytes() []byte {
+	xp := json.Bytes(l.t)
+	xp = append(xp, l.d...)
 	if !bytes.HasSuffix(xp, lineEnd) {
 		xp = append(xp, lineEnd...)
 	}
-	w.fno.Write(xp)
+	return xp
+}
+
+// Write 异步写入日志，返回固定为 0, nil
+func (w *Writer) Write(p []byte) (n int, err error) {
+	// xp := &logData{
+	// 	t: time.Now().Format(w.timeFormat),
+	// 	d: p,
+	// }
+	// if w.withFile {
+	w.chanGoWrite <- &logData{
+		t: time.Now().Format(w.timeFormat),
+		d: p,
+	}
+	// } else {
+	// 	w.fno.Write(xp.Bytes())
+	// }
 	// if w.withFile {
 	// 	if w.delayWrite {
 	// w.chanGoWrite <- xp
@@ -137,17 +154,27 @@ func (w *Writer) Write(p []byte) (n int, err error) {
 }
 
 func (w *Writer) startWrite() {
-	if !w.withFile {
-		return
-	}
-	go loopfunc.LoopFunc(func(params ...interface{}) {
+	// if !w.withFile {
+	// 	return
+	// }
+	go loopfunc.LoopFunc(func(params ...any) {
 		tc := time.NewTicker(time.Minute * 10)
 		defer tc.Stop()
-		for range tc.C {
-			if w.rollfile {
-				w.rollingFileNoLock()
+		for {
+			select {
+			case <-tc.C:
+				if w.rollfile {
+					w.rollingFileNoLock()
+				}
+			case msg := <-w.chanGoWrite:
+				w.fno.Write(msg.Bytes())
 			}
 		}
+		// for range tc.C {
+		// 	if w.rollfile {
+		// 		w.rollingFileNoLock()
+		// 	}
+		// }
 	}, "log writer", nil)
 }
 
