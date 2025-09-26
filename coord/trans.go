@@ -9,7 +9,7 @@ import (
 const (
 	offset      = 0.00669342162296594323
 	axis        = 6378245.0
-	earthRadius = 6372797.560856
+	earthRadius = 6372797.560856 // 6371000.0 // 地球平均半径 (米) 6378137.0 // 地球赤道半径
 )
 
 // IsOutOFChina 范围检测

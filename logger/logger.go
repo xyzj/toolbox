@@ -48,7 +48,7 @@ func (l *NilLogger) Error(msg string) {}
 func (l *NilLogger) System(msg string) {}
 
 // DefaultWriter 返回日志Writer
-func (l *NilLogger) DefaultWriter() io.Writer { return nil }
+func (l *NilLogger) DefaultWriter() io.Writer { return io.Discard }
 func (l *NilLogger) SetLevel(LogLevel)        {}
 
 // StdLogger mx log

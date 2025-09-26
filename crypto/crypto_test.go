@@ -1,34 +1,25 @@
 package crypto
 
 import (
+	"fmt"
+	"strings"
 	"testing"
+
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 func TestHash(t *testing.T) {
-	// v := "kjhfksdfh2983u92fsdkfhakjdhf92837@#$^&*()"
-	// buf := strings.Builder{}
-	v := "aaaaaaaaaaaaa我的aaaaaaa"
-	// v := "dlKvmrWa0d5rC7y1rxDhvBw7unmmgUUTFAwMJBnmTbJRnvGgtGvVvkzW5c+vGeiqhBRcQtgJdXpQ47x2OxhkK0Q/AdDSa4LVV/OVHftaYryetcxcLzJEPMPB3i9Eef349BHg0x3nJSvzNXp6qCo5SZFvjQvxivddzXMGuDI6tbT6LTSSM2vObv8ApuDXGBkQr9fc94XzY7TrlIyuAZqVFoWupdbpTOtqlWECVuu03Gwu55/k9bHT6TQDjburgi8mWGCU4e12d51NRw5hAF+eid87B7Q18bEnPs1jEBFce7mDawAawhjeQzpyS4rvETthDXZAnr4+HY5UzPY6PjkVEg=="
-	// for _, r := range s {
-	// 	if unicode.IsPrint(r) && !unicode.Is(unicode.So, r) {
-	// 		buf.WriteRune(r)
-	// 	}
-	// }
-	// println(buf.String(), len(s), len(buf.String()))
-	for i := 0; i < 10000; i++ {
-		// 	println(ObfuscationString(v))
-		// }
-		a := ObfuscationString(v)
-		b := DeobfuscationString(a)
-		if v != b {
-			t.Fatalf("not match, %d, %s, %s", i, v, b)
-			return
-		}
-	}
-
-	a := ObfuscationString(v)
-	b := DeobfuscationString(a)
-	println(b)
+	js, _ := sjson.Set("", "phoneNumbers", []string{"13817488888"})
+	js, _ = sjson.Set(js, "msgContents", []string{"您的验证码为：1234"})
+	//js := `{"phoneNumbers":["13817488888"], "msgContents":["您的验证码为：1234"]}`
+	a := fmt.Sprintf("%s%s%s%d", "test", "123456", gjson.Parse(js).String(), 1577944193000)
+	s := `test123456{"phoneNumbers":["13817488888"], "msgContents":["您的验证码为：1234"]}1577944193000`
+	b := `test123456{"phoneNumbers":["13817488888"], "msgContents":["您的验证码为：1234"]}1577944193000`
+	println(a)
+	println(GetMD5(strings.TrimSpace(a)))
+	println(GetMD5(s))
+	println(GetMD5(b))
 }
 
 func BenchmarkObfusNew(b *testing.B) {
