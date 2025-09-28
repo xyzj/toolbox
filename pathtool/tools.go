@@ -2,6 +2,7 @@
 package pathtool
 
 import (
+	"fmt"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -124,4 +125,18 @@ func MakeRuntimeDirs(rootpath string) (string, string, string) {
 	os.MkdirAll(slog, 0o775)
 	os.MkdirAll(scache, 0o775)
 	return sconf, slog, scache
+}
+
+// 添加文件大小格式化函数
+func FormatFileSize(size int64) string {
+	const unit = 1024
+	if size < unit {
+		return fmt.Sprintf("%d B", size)
+	}
+	div, exp := int64(unit), 0
+	for n := size / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(size)/float64(div), "KMGTPE"[exp])
 }

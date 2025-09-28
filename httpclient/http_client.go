@@ -19,15 +19,16 @@ type HTTPClient interface {
 }
 
 const (
-	HEADER_RESP_FROM     = "Resp-From"
-	HEADER_RESP_DURATION = "Resp-Duration"
-	HEADER_CONTENT_TYPE  = "Content-Type"
-	HEADER_COMPRESSED    = "Compressed"
-	HEADER_VALUE_URLE    = "application/x-www-form-urlencoded"
-	HEADER_VALUE_JSON    = "application/json; charset=utf-8"
-	HEADER_VALUE_ZSTD    = "zstd"
-	LogFormater          = "[req] |%d| %-13s |%s %s > %s"
-	LogErrFormater       = "[req] |%d| %s %s > %s"
+	HEADER_RESP_FROM       = "Resp-From"
+	HEADER_RESP_DURATION   = "Resp-Duration"
+	HEADER_CONTENT_TYPE    = "Content-Type"
+	HEADER_COMPRESSED      = "Compressed"
+	HEADER_COMPRESSED_DIFF = "Compressed-Diff"
+	HEADER_VALUE_URLE      = "application/x-www-form-urlencoded"
+	HEADER_VALUE_JSON      = "application/json; charset=utf-8"
+	HEADER_VALUE_ZSTD      = "zstd"
+	LogFormater            = "[req] |%d| %-13s |%s %s > %s"
+	LogErrFormater         = "[req] |%d| %s %s > %s"
 )
 
 type httpOpt struct {
