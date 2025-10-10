@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"codeberg.org/tealeg/xlsx/v4"
+	"github.com/tealeg/xlsx/v3"
 )
 
 var errSheetNotFound = func(sheetname string) error {

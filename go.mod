@@ -3,7 +3,6 @@ module github.com/xyzj/toolbox
 go 1.24.0
 
 require (
-	codeberg.org/tealeg/xlsx/v4 v4.0.0
 	github.com/bytedance/sonic v1.14.1
 	github.com/eclipse/paho.golang v0.22.0
 	github.com/eclipse/paho.mqtt.golang v1.5.1-0.20240903104606-514b7fa0af8f
@@ -20,6 +19,7 @@ require (
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible
 	github.com/starainrt/astro v0.0.0-20240209133137-7fd9deb71470
+	github.com/tealeg/xlsx/v3 v3.3.13
 	github.com/tidwall/gjson v1.17.1
 	github.com/tidwall/sjson v1.2.5
 	github.com/tjfoc/gmsm v1.4.2-0.20220114090716-36b992c51540
