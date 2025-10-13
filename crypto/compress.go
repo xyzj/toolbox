@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"compress/zlib"
+	"errors"
 	"io"
 
 	"github.com/klauspost/compress/zstd"
@@ -53,6 +54,9 @@ func (e *zstdEnc) Encode(src []byte) ([]byte, error) {
 		return nil, err
 	}
 	e.coder.Close()
+	if e.buf.Len() == 0 {
+		return []byte{}, errors.New("encode zstd failed")
+	}
 	return e.buf.Bytes(), nil
 }
 
@@ -73,6 +77,9 @@ func (e *zstdDec) Decode(src []byte) ([]byte, error) {
 	// }
 	// e.coder.Close()
 	e.coder.WriteTo(e.buf)
+	if e.buf.Len() == 0 {
+		return []byte{}, errors.New("decode zstd failed")
+	}
 	return e.buf.Bytes(), nil
 }
 
