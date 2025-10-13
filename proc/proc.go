@@ -104,7 +104,7 @@ func StartRecord(opt *RecordOpt) *Recorder {
 	r := &Recorder{
 		opt:       opt,
 		lastProc:  &procStatus{},
-		procCache: cache.NewRing[*procStatus](24 * 60),
+		procCache: cache.NewRing[*procStatus](int(opt.DataTimeout.Seconds() / opt.Timer.Seconds())),
 	}
 	go loopfunc.LoopFunc(func(params ...interface{}) {
 		var proce *process.Process
