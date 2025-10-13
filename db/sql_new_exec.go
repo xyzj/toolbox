@@ -58,7 +58,7 @@ func (d *Conn) ExecBatch(s []string) (err error) {
 //
 // s: sql语句
 // params: 查询参数,对应查询语句中的`？`占位符
-func (d *Conn) Exec(s string, params ...interface{}) (rowAffected, insertID int64, err error) {
+func (d *Conn) Exec(s string, params ...any) (rowAffected, insertID int64, err error) {
 	return d.ExecByDB(d.defaultDB, s, params...)
 }
 
@@ -67,7 +67,7 @@ func (d *Conn) Exec(s string, params ...interface{}) (rowAffected, insertID int6
 // dbidx: 指定数据库名称
 // s: sql语句
 // params: 查询参数,对应查询语句中的`？`占位符
-func (d *Conn) ExecByDB(dbidx int, s string, params ...interface{}) (rowAffected, insertID int64, err error) {
+func (d *Conn) ExecByDB(dbidx int, s string, params ...any) (rowAffected, insertID int64, err error) {
 	sqldb, err := d.SQLDB(dbidx)
 	if err != nil {
 		return 0, 0, err
@@ -81,24 +81,24 @@ func (d *Conn) ExecByDB(dbidx int, s string, params ...interface{}) (rowAffected
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), d.cfg.Timeout)
 	defer cancel()
-	// res, err := sqldb.ExecContext(ctx, s, params...)
+	res, err := sqldb.ExecContext(ctx, s, params...)
+	if err != nil {
+		return 0, 0, err
+	}
+	// 开启事务
+	// tx, err := sqldb.BeginTx(ctx, nil)
 	// if err != nil {
 	// 	return 0, 0, err
 	// }
-	// 开启事务
-	tx, err := sqldb.BeginTx(ctx, nil)
-	if err != nil {
-		return 0, 0, err
-	}
-	defer d.rollbackCheck(tx)
-	res, err := tx.ExecContext(ctx, s, params...)
-	if err != nil {
-		return 0, 0, err
-	}
-	err = tx.Commit()
-	if err != nil {
-		return 0, 0, err
-	}
+	// defer d.rollbackCheck(tx)
+	// res, err := tx.ExecContext(ctx, s, params...)
+	// if err != nil {
+	// 	return 0, 0, err
+	// }
+	// err = tx.Commit()
+	// if err != nil {
+	// 	return 0, 0, err
+	// }
 	insertID, _ = res.LastInsertId()
 	rowAffected, _ = res.RowsAffected()
 	return rowAffected, insertID, nil
@@ -109,7 +109,7 @@ func (d *Conn) ExecByDB(dbidx int, s string, params ...interface{}) (rowAffected
 // s: sql语句
 // paramNum: 占位符数量,为0时自动计算sql语句中`?`的数量
 // params: 查询参数,对应查询语句中的`？`占位符
-func (d *Conn) ExecPrepare(s string, paramNum int, params ...interface{}) (err error) {
+func (d *Conn) ExecPrepare(s string, paramNum int, params ...any) (err error) {
 	return d.ExecPrepareByDB(d.defaultDB, s, paramNum, params...)
 }
 
@@ -119,7 +119,7 @@ func (d *Conn) ExecPrepare(s string, paramNum int, params ...interface{}) (err e
 // s: sql语句
 // paramNum: 占位符数量,为0时自动计算sql语句中`?`的数量
 // params: 查询参数,对应查询语句中的`？`占位符
-func (d *Conn) ExecPrepareByDB(dbidx int, s string, paramNum int, params ...interface{}) (err error) {
+func (d *Conn) ExecPrepareByDB(dbidx int, s string, paramNum int, params ...any) (err error) {
 	sqldb, err := d.SQLDB(dbidx)
 	if err != nil {
 		return err
@@ -147,8 +147,13 @@ func (d *Conn) ExecPrepareByDB(dbidx int, s string, paramNum int, params ...inte
 		return err
 	}
 	defer d.rollbackCheck(tx)
+	st, err := tx.PrepareContext(ctx, s)
+	if err != nil {
+		return err
+	}
+	defer st.Close()
 	for i := 0; i < l; i += paramNum {
-		_, err := tx.ExecContext(ctx, s, params[i:i+paramNum]...)
+		_, err := st.ExecContext(ctx, params[i:i+paramNum]...)
 		if err != nil {
 			return err
 		}

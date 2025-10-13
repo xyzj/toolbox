@@ -149,12 +149,13 @@ func GlobalIPs() ([]string, []string, error) {
 }
 
 func CheckTCPAddr(s string) (*net.TCPAddr, bool) {
-	if s == "" {
-		return nil, false
-	}
 	if a, err := net.ResolveTCPAddr("tcp", s); err != nil {
 		return nil, false
 	} else {
+		switch a.Port {
+		case 0:
+			return nil, false
+		}
 		return a, true
 	}
 }
