@@ -17,7 +17,6 @@ import (
 	"github.com/go-echarts/go-echarts/v2/types"
 	"github.com/shirou/gopsutil/net"
 	"github.com/shirou/gopsutil/process"
-	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 	"github.com/xyzj/deepcopy"
 	"github.com/xyzj/toolbox"
@@ -69,7 +68,7 @@ type RecordOpt struct {
 }
 type Recorder struct {
 	lastProc  *procStatus
-	procCache *cache.AnyCache[*procStatus]
+	procCache *cache.Ring[*procStatus]
 	opt       *RecordOpt
 }
 
@@ -105,7 +104,7 @@ func StartRecord(opt *RecordOpt) *Recorder {
 	r := &Recorder{
 		opt:       opt,
 		lastProc:  &procStatus{},
-		procCache: cache.NewAnyCache[*procStatus](opt.DataTimeout),
+		procCache: cache.NewRing[*procStatus](24 * 60),
 	}
 	go loopfunc.LoopFunc(func(params ...interface{}) {
 		var proce *process.Process
@@ -141,7 +140,7 @@ func StartRecord(opt *RecordOpt) *Recorder {
 			connst, _ = proce.Connections()
 			r.lastProc.Conns = int32(len(connst))
 			r.lastProc.Dt = time.Now().Unix()
-			r.procCache.Store(time.Now().Format("01-02 15:04:05"), deepcopy.CopyAny(r.lastProc))
+			r.procCache.Store(deepcopy.CopyAny(r.lastProc))
 		}
 		t := time.NewTicker(r.opt.Timer)
 		c := 0
@@ -158,27 +157,23 @@ func StartRecord(opt *RecordOpt) *Recorder {
 }
 
 func (r *Recorder) Import(s []byte) {
-	gjson.ParseBytes(s).Get("data").ForEach(func(key, value gjson.Result) bool {
-		ls := &procStatus{
-			Dt:      value.Get("dt").Int(),
-			Cpup:    float32(value.Get("cpu").Float()),
-			Memp:    float32(value.Get("mem").Float()),
-			Memrss:  value.Get("rss").Uint(),
-			Memvms:  value.Get("vms").Uint(),
-			Ofd:     int32(value.Get("ofd").Int()),
-			Conns:   int32(value.Get("conn").Int()),
-			IORead:  value.Get("ior").Uint(),
-			IOWrite: value.Get("iow").Uint(),
+	d := []*procStatus{}
+	err := json.Unmarshal(s, &d)
+	if err != nil {
+		return
+	}
+	for _, v := range d {
+		if v == nil || v.Dt == 0 {
+			continue
 		}
-		r.procCache.Store(toolbox.Stamp2Time(ls.Dt, "01-02 15:04:05"), ls)
-		return true
-	})
+		r.procCache.Store(v)
+	}
 }
 
 func (r *Recorder) Export() []byte {
-	s := []byte{}
-	for _, v := range r.allData() {
-		s, _ = sjson.SetBytes(s, "data.-1", v)
+	s, err := r.procCache.MarshalJSON()
+	if err != nil {
+		return []byte{}
 	}
 	return s
 }
@@ -186,10 +181,7 @@ func (r *Recorder) Export() []byte {
 // allData 返回所有数据
 func (r *Recorder) allData() []*procStatus {
 	js := make([]*procStatus, 0, r.procCache.Len())
-	r.procCache.ForEach(func(key string, value *procStatus) bool {
-		js = append(js, value)
-		return true
-	})
+	js = append(js, r.procCache.Slice()...)
 	sort.Slice(js, func(i, j int) bool {
 		return js[i].Dt < js[j].Dt
 	})
