@@ -80,74 +80,122 @@ func IP2Int64(ipnr string) int64 {
 
 // RealIP 返回本机的v4或v6ip
 func RealIP(v6first bool) string {
-	if v6first {
-		if ip := ExternalIPV6(); ip != "" {
-			return ip
-		}
-	}
-	return ExternalIP()
+	s, _ := GetFirstLocalIP(v6first)
+	return s
 }
 
 // ExternalIP 返回v4地址
-func ExternalIP() string {
-	v4, v6, err := GlobalIPs()
-	if err != nil {
-		return ""
-	}
-	if len(v4) > 0 {
-		return v4[0]
-	}
-	if len(v6) > 0 {
-		return v6[0]
-	}
-	return ""
-}
+// func ExternalIP() string {
+// 	v4, v6, err := GlobalIPs()
+// 	if err != nil {
+// 		return ""
+// 	}
+// 	if len(v4) > 0 {
+// 		return v4[0]
+// 	}
+// 	if len(v6) > 0 {
+// 		return v6[0]
+// 	}
+// 	return ""
+// }
 
-// ExternalIPV6 返回v6地址
-func ExternalIPV6() string {
-	_, v6, err := GlobalIPs()
-	if err != nil {
-		return ""
-	}
-	if len(v6) > 0 {
-		return v6[0]
-	}
-	return ""
-}
+// // ExternalIPV6 返回v6地址
+// func ExternalIPV6() string {
+// 	_, v6, err := GlobalIPs()
+// 	if err != nil {
+// 		return ""
+// 	}
+// 	if len(v6) > 0 {
+// 		return v6[0]
+// 	}
+// 	return ""
+// }
 
-// GlobalIPs 返回所有可访问ip
-// ipv4 list,ipv6 list
-func GlobalIPs() ([]string, []string, error) {
-	v4, v6 := make([]string, 0), make([]string, 0)
-	s, err := net.InterfaceAddrs()
+// GetLocalIPs 返回本机所有网卡绑定的 IPv4 或 IPv6 地址（不包含回环或未启用接口）。
+// 参数 ipv6 = true 则返回 IPv6 地址，否则返回 IPv4 地址。
+// 会过滤：未启用接口、loopback、未指定地址（0.0.0.0 / ::）、链路本地地址（如 fe80::/10）。
+func GetLocalIPs(ipv6 bool) ([]string, error) {
+	ifaces, err := net.Interfaces()
 	if err != nil {
-		return v4, v6, err
+		return nil, err
 	}
-	for _, a := range s {
-		var ip net.IP
-		switch addr := a.(type) {
-		case *net.IPAddr:
-			ip = addr.IP
-		case *net.IPNet:
-			ip = addr.IP
-		default:
+
+	set := make(map[string]struct{})
+	for _, ifi := range ifaces {
+		// 只考虑已启用且非 loopback 的接口
+		if ifi.Flags&net.FlagUp == 0 || ifi.Flags&net.FlagLoopback != 0 {
 			continue
 		}
-		if ip.To4().String() != "<nil>" {
-			if ip.IsGlobalUnicast() {
-				v4 = append(v4, ip.To4().String())
-			}
+		addrs, err := ifi.Addrs()
+		if err != nil {
 			continue
 		}
-		if ip.To16().String() != "<nil>" {
-			if ip.IsGlobalUnicast() {
-				v6 = append(v6, "["+ip.To16().String()+"]")
+		for _, a := range addrs {
+			var ip net.IP
+			switch v := a.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			default:
+				continue
 			}
+			if ip == nil {
+				continue
+			}
+			// 排除环回、未指定地址
+			if ip.IsLoopback() || ip.IsUnspecified() {
+				continue
+			}
+			if ipv6 {
+				// 仅保留 IPv6（排除 IPv4 映射/混合）
+				if ip.To4() != nil {
+					continue
+				}
+				// 排除链路本地（fe80::/10）和多播链路本地
+				if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+					continue
+				}
+			} else {
+				// 仅保留 IPv4
+				if ip4 := ip.To4(); ip4 == nil {
+					continue
+				}
+			}
+			s := ip.String()
+			// 如果请求 IPv6，返回时加上方括号，方便后续拼接端口如 "[::1]:8080"
+			if ipv6 {
+				if !strings.HasPrefix(s, "[") && !strings.HasSuffix(s, "]") {
+					s = "[" + s + "]"
+				}
+			}
+			set[s] = struct{}{}
 		}
 	}
-	return v4, v6, nil
+
+	if len(set) == 0 {
+		return nil, fmt.Errorf("no local addresses found")
+	}
+	out := make([]string, 0, len(set))
+	for k := range set {
+		out = append(out, k)
+	}
+	return out, nil
 }
 
+// GetFirstLocalIP 返回首个匹配的本机地址，找不到时返回空字符串和错误。
+// 优先 IPv4（preferIPv6=false），可通过 preferIPv6 改变优先级。
+func GetFirstLocalIP(preferIPv6 bool) (string, error) {
+	// 先按偏好获取
+	if ips, err := GetLocalIPs(preferIPv6); err == nil && len(ips) > 0 {
+		return ips[0], nil
+	}
+	// 反向再试一次
+	if ips, err := GetLocalIPs(!preferIPv6); err == nil && len(ips) > 0 {
+		return ips[0], nil
+	}
+	return "", fmt.Errorf("no local address found")
+}
 func CheckTCPAddr(s string) (*net.TCPAddr, bool) {
 	if a, err := net.ResolveTCPAddr("tcp", s); err != nil {
 		return nil, false

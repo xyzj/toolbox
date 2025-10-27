@@ -18,6 +18,25 @@ import (
 	"golang.org/x/text/transform"
 )
 
+const (
+	unitYearZh           = "年"
+	unitMonthZh          = "个月"
+	unitDayZh            = "天"
+	unitHourZh           = "小时"
+	unitMinuteZh         = "分钟"
+	unitSecondZh         = "秒"
+	unitLessThanDayZh    = "不到一天"
+	unitLessThanMinuteZh = "不到一分钟"
+	unitYearEn           = " years"
+	unitMonthEn          = " months"
+	unitDayEn            = " days"
+	unitHourEn           = " hours"
+	unitMinuteEn         = " minutes"
+	unitSecondEn         = " seconds"
+	unitLessThanDayEn    = "less than a day"
+	unitLessThanMinuteEn = "less than a minute"
+)
+
 // GbkToUtf8 gbk编码转utf8
 func GbkToUtf8(s []byte) ([]byte, error) {
 	if utf8.Valid(s) {
@@ -689,16 +708,16 @@ func Days2String(days int) string {
 	}
 	out := []string{}
 	if y > 0 {
-		out = append(out, fmt.Sprintf("%d Years", y))
+		out = append(out, fmt.Sprintf("%d"+unitYearEn, y))
 	}
 	if m > 0 {
-		out = append(out, fmt.Sprintf("%d Months", m))
+		out = append(out, fmt.Sprintf("%d"+unitMonthEn, m))
 	}
 	if d == 0 {
-		out = append(out, "less than a day")
+		out = append(out, unitLessThanDayEn)
 	} else {
 		if d > 0 {
-			out = append(out, fmt.Sprintf("%d Days", d))
+			out = append(out, fmt.Sprintf("%d"+unitDayEn, d))
 		}
 	}
 	return strings.Join(out, ", ")
@@ -716,16 +735,16 @@ func Seconds2String(sec int64) string {
 	}
 	out := []string{}
 	if days > 0 {
-		out = append(out, fmt.Sprintf("%d Days", days))
+		out = append(out, fmt.Sprintf("%d"+unitDayEn, days))
 	}
 	if hours > 0 {
-		out = append(out, fmt.Sprintf("%d Hours", hours))
+		out = append(out, fmt.Sprintf("%d"+unitHourEn, hours))
 	}
 	if minutes+hours+days == 0 {
-		out = append(out, "less than a minute")
+		out = append(out, unitLessThanMinuteEn)
 	} else {
 		if minutes > 0 {
-			out = append(out, fmt.Sprintf("%d Minutes", minutes))
+			out = append(out, fmt.Sprintf("%d"+unitMinuteEn, minutes))
 		}
 	}
 	return strings.Join(out, ", ")
@@ -749,16 +768,16 @@ func Days2StringCHS(days int) string {
 	}
 	out := []string{}
 	if y > 0 {
-		out = append(out, fmt.Sprintf("%d年", y))
+		out = append(out, fmt.Sprintf("%d"+unitYearZh, y))
 	}
 	if m > 0 {
-		out = append(out, fmt.Sprintf("%d个月", m))
+		out = append(out, fmt.Sprintf("%d"+unitMonthZh, m))
 	}
 	if m+y+d == 0 {
-		out = append(out, "不到1天")
+		out = append(out, unitLessThanDayZh)
 	} else {
 		if d > 0 {
-			out = append(out, fmt.Sprintf("%d天", d))
+			out = append(out, fmt.Sprintf("%d"+unitDayZh, d))
 		}
 	}
 	return strings.Join(out, ", ")
@@ -789,4 +808,108 @@ func Seconds2StringCHS(sec int64) string {
 		}
 	}
 	return strings.Join(out, ", ")
+}
+
+// ParseNumberRange 解析逗号分隔的数字字符串，支持范围表示法（如"2-8"）
+// 输入示例: "1,3,5-9,12"
+// 输出: [1,3,5,6,7,8,9,12]
+func ParseNumberRange(input string) ([]int64, error) {
+	if input == "" {
+		return []int64{}, nil
+	}
+
+	var result []int64
+	parts := strings.Split(input, ",")
+
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+
+		// 检查是否是范围表示法（如"2-8"）
+		if strings.Contains(part, "-") {
+			rangeParts := strings.Split(part, "-")
+			if len(rangeParts) != 2 {
+				return nil, fmt.Errorf("invalid range format: %s", part)
+			}
+
+			start, err := strconv.ParseInt(strings.TrimSpace(rangeParts[0]), 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("invalid start number in range %s: %v", part, err)
+			}
+
+			end, err := strconv.ParseInt(strings.TrimSpace(rangeParts[1]), 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("invalid end number in range %s: %v", part, err)
+			}
+
+			if start > end {
+				return nil, fmt.Errorf("invalid range %s: start cannot be greater than end", part)
+			}
+
+			// 添加范围内的所有数字
+			for i := start; i <= end; i++ {
+				result = append(result, i)
+			}
+		} else {
+			// 单个数字
+			num, err := strconv.ParseInt(part, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("invalid number: %s", part)
+			}
+			result = append(result, num)
+		}
+	}
+
+	return result, nil
+}
+
+// FormatSecondsHMS 把秒数格式化为 "XhYmZs" 的形式
+// 例如:
+//
+//	3661 -> "1h1m1s"
+//	61   -> "1m1s"
+//	45   -> "45s"
+func FormatSecondsHMS(sec int64, showSeconds, chinese bool) string {
+	unitsec := unitSecondEn
+	unitmin := unitMinuteEn
+	unithour := unitHourEn
+	unitless := unitLessThanMinuteEn
+	if chinese {
+		unitsec = unitSecondZh
+		unitmin = unitMinuteZh
+		unithour = unitHourZh
+		unitless = unitLessThanMinuteZh
+	}
+
+	if sec <= 0 {
+		if showSeconds {
+			return "0" + unitsec
+		}
+		return "0" + unitmin
+	}
+	h := sec / 3600
+	sec = sec % 3600
+	m := sec / 60
+	s := sec % 60
+
+	var b strings.Builder
+	if h > 0 {
+		fmt.Fprintf(&b, "%d"+unithour, h)
+	}
+	if m > 0 {
+		fmt.Fprintf(&b, "%d"+unitmin, m)
+	}
+	if showSeconds {
+		if s > 0 || b.Len() == 0 {
+			fmt.Fprintf(&b, "%d"+unitsec, s)
+		}
+	} else {
+		// 不显示秒：如果没有小时和分钟，则返回 "0m"
+		if b.Len() == 0 {
+			return unitless
+		}
+	}
+	return b.String()
 }

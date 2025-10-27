@@ -10,10 +10,10 @@ import "github.com/bytedance/sonic"
 
 var (
 	json = sonic.Config{
-		NoNullSliceOrMap:        true,
 		NoValidateJSONMarshaler: true,
 		NoValidateJSONSkip:      true,
 		NoEncoderNewline:        true,
+		EncodeNullForInfOrNan:   true,
 	}.Froze()
 	// Marshal is exported by gin/json package.
 	Marshal = json.Marshal

@@ -23,6 +23,104 @@ import (
 	"go.uber.org/ratelimit"
 )
 
+// GetClientIPPort 从 gin.Context 中解析请求来源的实际 IP 和端口。
+// 优先使用常见代理头（X-Forwarded-For, X-Real-IP, CF-Connecting-IP, Forwarded），
+// 若头中包含多个值取第一个；若头只含 IP（无端口）则端口为空。
+// 返回 ip (不带方括号) 和 port（可能为空）。
+func GetClientIPPort(c *gin.Context) (string, string) {
+	// helper: try to split host:port, return host and port if possible
+	splitHostPort := func(s string) (string, string) {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			return "", ""
+		}
+		// Try standard SplitHostPort first (handles [v6]:port too)
+		if h, p, err := net.SplitHostPort(s); err == nil {
+			return h, p
+		}
+		// If no port, return raw (for IPv6 may be like "2001:db8::1")
+		// Strip surrounding brackets if present
+		if strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]") {
+			return strings.Trim(s, "[]"), ""
+		}
+		return s, ""
+	}
+
+	// 1. X-Forwarded-For: may be "client, proxy1, proxy2"
+	if xff := strings.TrimSpace(c.Request.Header.Get("X-Forwarded-For")); xff != "" {
+		parts := strings.Split(xff, ",")
+		if len(parts) > 0 {
+			if ip, port := splitHostPort(strings.TrimSpace(parts[0])); ip != "" {
+				return ip, port
+			}
+		}
+	}
+	// 2. X-Real-IP
+	if xr := strings.TrimSpace(c.Request.Header.Get("X-Real-IP")); xr != "" {
+		if ip, port := splitHostPort(xr); ip != "" {
+			return ip, port
+		}
+	}
+	// 3. CF-Connecting-IP
+	if cf := strings.TrimSpace(c.Request.Header.Get("CF-Connecting-IP")); cf != "" {
+		if ip, port := splitHostPort(cf); ip != "" {
+			return ip, port
+		}
+	}
+	// 4. Forwarded: look for for= token. e.g. Forwarded: for=192.0.2.60:1234;proto=http
+	if fwd := strings.TrimSpace(c.Request.Header.Get("Forwarded")); fwd != "" {
+		lower := strings.ToLower(fwd)
+		if idx := strings.Index(lower, "for="); idx != -1 {
+			sub := fwd[idx+4:]
+			// if quoted
+			if strings.HasPrefix(sub, "\"") {
+				sub = strings.TrimPrefix(sub, "\"")
+				if j := strings.Index(sub, "\""); j != -1 {
+					sub = sub[:j]
+				}
+			} else {
+				// cut at ; or ,
+				if j := strings.IndexAny(sub, ";,"); j != -1 {
+					sub = sub[:j]
+				}
+			}
+			if ip, port := splitHostPort(strings.TrimSpace(sub)); ip != "" {
+				return ip, port
+			}
+		}
+	}
+
+	// 5. 最后回退到 RemoteAddr
+	if ra := strings.TrimSpace(c.Request.RemoteAddr); ra != "" {
+		if ip, port, err := net.SplitHostPort(ra); err == nil {
+			// ip may be "[v6]" or plain
+			ip = strings.Trim(ip, "[]")
+			return ip, port
+		}
+		// if can't split, return raw as ip
+		return ra, ""
+	}
+
+	return "", ""
+}
+
+// GetClientAddr 返回用于连接/显示的地址字符串。
+// 如果有端口则返回 "ip:port"（IPv6 会自动加方括号），否则返回 ip。
+func GetClientAddr(c *gin.Context) string {
+	ip, port := GetClientIPPort(c)
+	if ip == "" {
+		return ""
+	}
+	// IPv6 needs brackets when combined with port
+	if port == "" {
+		return ip
+	}
+	if strings.Contains(ip, ":") {
+		return "[" + ip + "]:" + port
+	}
+	return ip + ":" + port
+}
+
 // GetSocketTimeout 获取超时时间
 func GetSocketTimeout() time.Duration {
 	t, err := strconv.ParseInt(os.Getenv("GO_SERVER_SOCKET_TIMEOUT"), 10, 64)

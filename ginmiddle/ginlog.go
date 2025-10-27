@@ -67,6 +67,7 @@ func LogToWriter(w io.Writer, skippath ...string) gin.HandlerFunc {
 			}
 		}
 		start := time.Now()
+		addr := GetClientAddr(c)
 		c.Next()
 		// Stop timer
 		chanlog <- &logParam{
@@ -74,7 +75,7 @@ func LogToWriter(w io.Writer, skippath ...string) gin.HandlerFunc {
 			path:       c.Request.URL.Path,
 			token:      c.GetHeader("User-Token"),
 			body:       c.Param("_body"),
-			clientIP:   c.ClientIP(),
+			clientIP:   addr,
 			method:     c.Request.Method,
 			statusCode: c.Writer.Status(),
 			username:   c.Param("_userTokenName"),

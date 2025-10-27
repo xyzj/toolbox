@@ -7,6 +7,10 @@ import (
 	"time"
 )
 
+var (
+	ErrNoNeedReUnion = errors.New("no need to re-union view")
+)
+
 func (d *Conn) AlterUnionView(dbname, tableName, alterStr string, maxSubTables int) error {
 	// 判断是否符合分表要求
 	if d.cfg.DriverType != DriveMySQL {
@@ -41,6 +45,7 @@ func (d *Conn) AlterUnionView(dbname, tableName, alterStr string, maxSubTables i
 	for _, sub := range subTablelist {
 		_, _, err = d.ExecByDB(dbidx, strings.Replace(alterStr, tableName, sub, 1))
 		if err != nil {
+			d.cfg.Logger.Error("[unview] alter table " + sub + " error:" + err.Error())
 			continue
 		}
 	}
@@ -71,7 +76,7 @@ func (d *Conn) UnionView(dbname, tableName string, maxSubTables, maxTableSize, m
 			return err
 		}
 		if ans.Rows[0].VCells[0].TryInt() < maxTableSize && ans.Rows[0].VCells[1].TryInt() < maxTableRows {
-			return nil
+			return ErrNoNeedReUnion
 		}
 	}
 	var tmpTableName = strings.TrimSuffix(tableName, "_all")

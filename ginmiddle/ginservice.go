@@ -173,7 +173,7 @@ func LiteEngine(w io.Writer, hosts ...string) *gin.Engine {
 		AllowHeaders:     []string{"*"},
 	}))
 	// 处理转发ip
-	r.Use(XForwardedIP())
+	// r.Use(XForwardedIP())
 	// 配置日志
 	r.Use(LogToWriter(w))
 	// 故障恢复
