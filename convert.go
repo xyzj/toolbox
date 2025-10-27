@@ -913,3 +913,10 @@ func FormatSecondsHMS(sec int64, showSeconds, chinese bool) string {
 	}
 	return b.String()
 }
+
+// StringToFixedRightPad 截断或右侧填充 0x00 到指定字节长度 n
+func StringToFixedRightPad(s string, n int) []byte {
+	b := make([]byte, n)
+	copy(b, []byte(s)) // copy 会把最多 n 个字节复制进去，剩余保持为 0x00
+	return b
+}

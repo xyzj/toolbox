@@ -221,7 +221,7 @@ func NewTcpFactory(opts ...Options) (*TCPManager, error) {
 	for _, o := range opts {
 		o(&opt)
 	}
-	b, ok := toolbox.CheckTCPAddr(opt.bind)
+	b, ok := toolbox.ValidateIPPort(opt.bind)
 	if !ok {
 		return nil, fmt.Errorf("invalid bind address: %s", opt.bind)
 	}

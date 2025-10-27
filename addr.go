@@ -196,14 +196,105 @@ func GetFirstLocalIP(preferIPv6 bool) (string, error) {
 	}
 	return "", fmt.Errorf("no local address found")
 }
-func CheckTCPAddr(s string) (*net.TCPAddr, bool) {
-	if a, err := net.ResolveTCPAddr("tcp", s); err != nil {
+
+// ValidateIPPort 验证输入的 "ip:port" 字符串（支持 IPv4 和 IPv6）。
+// 返回解析出的 ip（不含方括号与 zone）和端口号；解析失败返回 error。
+// 支持格式示例：
+//
+//	1.2.3.4:80
+//	[2001:db8::1]:443
+//	2001:db8::1:443   // 尝试通过最后一个冒号分割 host/port（推荐使用带方括号的 IPv6）
+//
+// 注：IPv6 带 zone 的情况会在验证时去掉 zone（例如 fe80::1%eth0 -> fe80::1）。
+func ValidateIPPort(s string) (*net.TCPAddr, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
 		return nil, false
-	} else {
-		switch a.Port {
-		case 0:
+	}
+
+	// 优先使用 ResolveTCPAddr（能处理带 zone 的 IPv6、带方括号的 v6 等）
+	if a, err := net.ResolveTCPAddr("tcp", s); err == nil {
+		if a.Port == 0 {
 			return nil, false
 		}
 		return a, true
 	}
+
+	// 回退解析：先尝试 SplitHostPort（处理 [v6]:port）
+	var host, portStr string
+	if h, p, err := net.SplitHostPort(s); err == nil {
+		host = h
+		portStr = p
+	} else {
+		// 使用最后一个冒号分割（处理未带方括号的 v6:port 或 ipv4:port）
+		if idx := strings.LastIndex(s, ":"); idx == -1 {
+			return nil, false
+		} else {
+			host = s[:idx]
+			portStr = s[idx+1:]
+		}
+	}
+
+	// 解析端口并检查范围
+	port, err := strconv.Atoi(strings.TrimSpace(portStr))
+	if err != nil || port <= 0 || port > 65535 {
+		return nil, false
+	}
+
+	// 去掉方括号并提取 zone（如 fe80::1%eth0）
+	host = strings.TrimSpace(host)
+	host = strings.Trim(host, "[]")
+	zone := ""
+	if i := strings.LastIndex(host, "%"); i != -1 {
+		zone = host[i+1:]
+		host = host[:i]
+	}
+
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return nil, false
+	}
+
+	tcp := &net.TCPAddr{
+		IP:   ip,
+		Port: port,
+	}
+	// 如果有 zone 并且是 IPv6，填充 Zone 字段
+	if zone != "" && ip.To16() != nil && ip.To4() == nil {
+		tcp.Zone = zone
+	}
+
+	return tcp, true
+}
+
+// IPv6ToInt32Segments 将 IPv6 地址字符串转换为 16 字节的表示形式。
+// 每个 16 位段使用低字节在前（little-endian per segment）。
+// 支持缩写 ::、带方括号的形式 [::1] 以及带 zone 的形式 fe80::1%eth0。
+// 返回长度为 16 的 byte 数组，解析失败返回错误。
+func IPv6ToInt32Segments(s string) ([]byte, error) {
+	var out = make([]byte, 0, 16)
+	s = strings.TrimSpace(s)
+	// 去掉方括号 [::1]
+	if strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]") {
+		s = s[1 : len(s)-1]
+	}
+	// 去掉 zone id 如 %eth0
+	if i := strings.LastIndex(s, "%"); i != -1 {
+		s = s[:i]
+	}
+	ip := net.ParseIP(s)
+	if ip == nil {
+		return out, fmt.Errorf("invalid ip: %s", s)
+	}
+	ip = ip.To16()
+	if ip == nil || ip.To4() != nil {
+		return out, fmt.Errorf("not an IPv6 address: %s", s)
+	}
+	// 每段 2 字节，低字节在前
+	for seg := 0; seg < 8; seg++ {
+		hi := ip[2*seg]
+		lo := ip[2*seg+1]
+		out = append(out, lo, hi)
+	}
+	return out, nil
 }
