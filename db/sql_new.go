@@ -164,7 +164,7 @@ func New(opt *Opt) (*Conn, error) {
 	var err error
 	reConn := 0
 	if strings.Contains(opt.Server, ":") {
-		n, ok := toolbox.CheckTCPAddr(opt.Server)
+		n, ok := toolbox.ValidateIPPort(opt.Server)
 		if ok {
 			port = n.Port
 			if n.IP == nil {
