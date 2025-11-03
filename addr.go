@@ -267,6 +267,24 @@ func ValidateIPPort(s string) (*net.TCPAddr, bool) {
 	return tcp, true
 }
 
+// Int32SegmentsToIPv6 将 16 字节（每段 2 字节，低字节在前，little-endian per segment）的数据
+// 还原为标准的 IPv6 字符串表示（如 "2001:db8::1"）。
+// 输入长度必须为 16，否则返回错误。
+func Int32SegmentsToIPv6(b []byte) (string, error) {
+	if len(b) != 16 {
+		return "", fmt.Errorf("invalid input length: %d", len(b))
+	}
+	ip := make(net.IP, net.IPv6len)
+	// 每段 2 字节，原先存储为 [lo, hi], 需要恢复为 [hi, lo]
+	for seg := range 8 {
+		lo := b[2*seg]
+		hi := b[2*seg+1]
+		ip[2*seg] = hi
+		ip[2*seg+1] = lo
+	}
+	return ip.String(), nil
+}
+
 // IPv6ToInt32Segments 将 IPv6 地址字符串转换为 16 字节的表示形式。
 // 每个 16 位段使用低字节在前（little-endian per segment）。
 // 支持缩写 ::、带方括号的形式 [::1] 以及带 zone 的形式 fe80::1%eth0。

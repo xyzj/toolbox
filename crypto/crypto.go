@@ -215,7 +215,7 @@ func ObfuscationString(s string) string {
 	y.Write(GetRandom(3))
 	zz := y.Bytes()
 	zz = json.ReverseBytes(zz)
-	a := base64.StdEncoding.EncodeToString(zz)
+	a := base64.URLEncoding.EncodeToString(zz)
 	a = json.ReverseString(a)
 	a = json.SwapCase(a)
 	a = strings.Replace(a, "=", "", -1)
@@ -224,7 +224,7 @@ func ObfuscationString(s string) string {
 
 func DeobfuscationString(s string) string {
 	s = FillBase64(json.ReverseString(json.SwapCase(s)))
-	a, err := base64.StdEncoding.DecodeString(s)
+	a, err := base64.URLEncoding.DecodeString(s)
 	if err != nil {
 		return ""
 	}

@@ -48,9 +48,9 @@ type Ring[T any] struct {
 // Returns true to indicate successful storage.
 func (u *Ring[T]) Store(data T) bool {
 	u.locker.Lock()
-	defer u.locker.Unlock()
 	u.data.Value = data
 	u.data = u.data.Next()
+	u.locker.Unlock()
 	return true
 }
 
@@ -62,29 +62,30 @@ func (u *Ring[T]) Store(data T) bool {
 //   - msgs: Variable number of chat completion messages to store
 func (u *Ring[T]) StoreMany(msgs ...T) {
 	u.locker.Lock()
-	defer u.locker.Unlock()
 	for _, msg := range msgs {
 		u.data.Value = msg
 		u.data = u.data.Next()
 	}
+	u.locker.Unlock()
 }
 
 // Clear removes all messages from the history buffer by setting all
 // ring elements to nil. The buffer structure remains intact and ready for new messages.
 func (u *Ring[T]) Clear() {
 	u.locker.Lock()
-	defer u.locker.Unlock()
 	u.data.Do(func(a any) {
 		u.data.Value = nil
 	})
+	u.locker.Unlock()
 }
 
 // Len returns the capacity of the history buffer (not the number of stored messages).
 // This represents the maximum number of messages that can be stored.
 func (u *Ring[T]) Len() int {
 	u.locker.RLock()
-	defer u.locker.RUnlock()
-	return u.data.Len()
+	l := u.data.Len()
+	u.locker.RUnlock()
+	return l
 }
 
 // Slice returns all non-nil messages from the history buffer as a slice.
@@ -95,7 +96,6 @@ func (u *Ring[T]) Len() int {
 //   - []T: Slice of stored messages in chronological order
 func (u *Ring[T]) Slice() []T {
 	u.locker.RLock()
-	defer u.locker.RUnlock()
 	x := make([]T, 0, u.data.Len())
 	u.data.Do(func(a any) {
 		if a == nil {
@@ -103,6 +103,7 @@ func (u *Ring[T]) Slice() []T {
 		}
 		x = append(x, a.(T))
 	})
+	u.locker.RUnlock()
 	return x
 }
 

@@ -271,6 +271,15 @@ func (w *RSA) VerifySignFromBase64(signature string, data []byte) (bool, error) 
 	return w.VerifySign(bb, data)
 }
 
+// VerifySignFromBase64 验证base64格式的签名
+func (w *RSA) VerifySignFromURLBase64(signature string, data []byte) (bool, error) {
+	bb, err := base64.URLEncoding.DecodeString(signature)
+	if err != nil {
+		return false, err
+	}
+	return w.VerifySign(bb, data)
+}
+
 // VerifySignFromHex 验证hexstring格式的签名
 func (w *RSA) VerifySignFromHex(signature string, data []byte) (bool, error) {
 	bb, err := hex.DecodeString(signature)
