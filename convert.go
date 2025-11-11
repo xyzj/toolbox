@@ -876,7 +876,9 @@ func FormatSecondsHMS(sec int64, showSeconds, chinese bool) string {
 	unitmin := unitMinuteEn
 	unithour := unitHourEn
 	unitless := unitLessThanMinuteEn
+	unitday := unitDayEn
 	if chinese {
+		unitday = unitDayZh
 		unitsec = unitSecondZh
 		unitmin = unitMinuteZh
 		unithour = unitHourZh
@@ -889,12 +891,16 @@ func FormatSecondsHMS(sec int64, showSeconds, chinese bool) string {
 		}
 		return "0" + unitmin
 	}
+	d := sec / 3600 * 24
 	h := sec / 3600
 	sec = sec % 3600
 	m := sec / 60
 	s := sec % 60
 
 	var b strings.Builder
+	if d > 0 {
+		fmt.Fprintf(&b, "%d"+unitday, d)
+	}
 	if h > 0 {
 		fmt.Fprintf(&b, "%d"+unithour, h)
 	}
@@ -912,6 +918,40 @@ func FormatSecondsHMS(sec int64, showSeconds, chinese bool) string {
 		}
 	}
 	return b.String()
+}
+func FormatBytes(bytes int64) string {
+	// 1. 处理零值和负值
+	if bytes < 0 {
+		return "Invalid size"
+	}
+	if bytes == 0 {
+		return "0 B"
+	}
+
+	// 2. 定义基数和单位后缀
+	const unit = 1024
+	suffixes := []string{"B", "KB", "MB", "GB", "TB", "PB", "EB"} // Exabyte
+
+	// 3. 将 int64 转换为 float64 进行对数运算
+	size := float64(bytes)
+
+	// 4. 计算指数 (i): 确定应该使用哪个单位
+	// i = floor(log_1024(size))
+	// math.Log(size) / math.Log(unit) 计算 size 是 unit 的多少次方
+	i := math.Floor(math.Log(size) / math.Log(unit))
+
+	// 5. 确保指数不超过后缀列表的范围
+	if i >= float64(len(suffixes)) {
+		i = float64(len(suffixes) - 1)
+	}
+
+	// 6. 计算实际数值：value = size / (unit ^ i)
+	// math.Pow(unit, i) 计算 1024 的 i 次方
+	value := size / math.Pow(unit, i)
+
+	// 7. 格式化输出 (保留两位小数)
+	// 使用 suffixes[int(i)] 获取对应的单位
+	return fmt.Sprintf("%.2f %s", value, suffixes[int(i)])
 }
 
 // StringToFixedRightPad 截断或右侧填充 0x00 到指定字节长度 n

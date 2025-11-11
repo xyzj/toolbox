@@ -13,6 +13,14 @@ import (
 	"github.com/xyzj/toolbox/logger"
 )
 
+var (
+	hc = New()
+)
+
+func DoRequestWithTimeout(req *http.Request, timeout time.Duration) (int, []byte, map[string]string, error) {
+	return hc.DoRequest(req, WithTimeout(timeout))
+}
+
 type HTTPClient interface {
 	DoRequest(*http.Request, ...ReqOptions) (int, []byte, map[string]string, error)
 	DoStreamRequest(*http.Request, func(map[string]string), func([]byte) bool, ...ReqOptions) error
@@ -26,6 +34,7 @@ const (
 	HEADER_COMPRESSED_DIFF = "Compressed-Diff"
 	HEADER_VALUE_URLE      = "application/x-www-form-urlencoded"
 	HEADER_VALUE_JSON      = "application/json; charset=utf-8"
+	HEADER_VALUE_HTML      = "text/html; charset=utf-8"
 	HEADER_VALUE_ZSTD      = "zstd"
 	LogFormater            = "[req] |%d| %-13s |%s %s > %s"
 	LogErrFormater         = "[req] |%d| %s %s > %s"
