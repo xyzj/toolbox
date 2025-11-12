@@ -3,6 +3,7 @@ package tcpfactory
 import (
 	"bytes"
 	"fmt"
+	"math/rand"
 	"net"
 	"strings"
 	"sync/atomic"
@@ -11,63 +12,80 @@ import (
 	"github.com/xyzj/deepcopy"
 	gopool "github.com/xyzj/go-pool"
 	"github.com/xyzj/toolbox"
+	"github.com/xyzj/toolbox/cache"
 	"github.com/xyzj/toolbox/loopfunc"
 	"github.com/xyzj/toolbox/mapfx"
 	"github.com/xyzj/toolbox/queue"
 )
 
 type TCPManager struct {
-	members  *mapfx.StructMap[uint64, tcpCore]
-	opt      *opt
-	listener *net.TCPListener
-	addr     *net.TCPAddr
-	// recycle  sync.Pool
-	recycle  *gopool.GoPool[*tcpCore]
-	fastHash *mapfx.BaseMap[uint64]
-	shutdown atomic.Bool
-}
-
-func (t *TCPManager) writeToSocket(target string, front bool, msgs ...*SendMessage) bool {
-	sid, ok := t.fastHash.Load(target)
-	if ok {
-		v, ok := t.members.LoadForUpdate(sid)
-		if ok {
-			if front {
-				return v.writeTo(target, front, msgs...)
-			}
-		}
-	}
-	return false
+	members     *mapfx.StructMap[uint64, tcpCore]
+	opt         *opt
+	listener    *net.TCPListener
+	addr        *net.TCPAddr
+	recycle     *gopool.GoPool[*tcpCore]
+	targetCache *mapfx.BaseMap[uint64]
+	reportCache *cache.AnyCache[*reportItem]
+	shutdown    atomic.Bool
 }
 
 func (t *TCPManager) HealthReport() map[uint64]any {
-	dis := make([]uint64, 0, t.members.Len())
-	a := make(map[uint64]any)
-	t.members.ForEachWithRLocker(func(key uint64, value *tcpCore) bool {
-		if value.closed.Load() {
-			dis = append(dis, key)
-			return true
-		}
-		if time.Since(value.timeLastRead) > t.opt.readTimeout+time.Second*20 { // 读取超时，但却没有被关闭，通常为虚连接
-			value.disconnect("socket anomaly")
-			return true
-		}
-
-		if t.opt.registTimeout > 0 && time.Since(value.timeConnection) > t.opt.registTimeout { //  && value.sendQueue.Len() == 0
-			if z, ok := value.healthReport(); !ok {
-				value.disconnect("unregistered connection")
-			} else {
-				a[key] = z
+	// dis := make([]uint64, 0, t.members.Len())
+	a := make(map[uint64]any, t.members.Len())
+	t.reportCache.ForEach(func(key string, value *reportItem) bool {
+		if time.Since(value.lastRead) > t.opt.readTimeout+time.Second*20 {
+			xc, ok := t.members.LoadForUpdate(value.id)
+			if ok {
+				xc.disconnect("socket anomaly")
 			}
 			return true
 		}
-		if z, ok := value.healthReport(); ok {
-			a[key] = z
+		if !value.status && t.opt.registTimeout > 0 && time.Since(value.connTime) > t.opt.registTimeout {
+			xc, ok := t.members.LoadForUpdate(value.id)
+			if ok {
+				xc.disconnect("unregistered connection")
+			}
+			return true
 		}
+		a[value.id] = value.msg
 		return true
 	})
-	t.members.DeleteMore(dis...)
+	// t.members.ForEachWithRLocker(func(key uint64, value *tcpCore) bool {
+	// 	if value.closed.Load() {
+	// 		dis = append(dis, key)
+	// 		return true
+	// 	}
+	// 	if time.Since(value.timeLastRead) > t.opt.readTimeout+time.Second*20 { // 读取超时，但却没有被关闭，通常为虚连接
+	// 		value.disconnect("socket anomaly")
+	// 		return true
+	// 	}
+
+	// 	if t.opt.registTimeout > 0 && time.Since(value.timeConnection) > t.opt.registTimeout { //  && value.sendQueue.Len() == 0
+	// 		if z, ok := value.healthReport(); !ok {
+	// 			value.disconnect("unregistered connection")
+	// 		} else {
+	// 			a[key] = z
+	// 		}
+	// 		return true
+	// 	}
+	// 	if z, ok := value.healthReport(); ok {
+	// 		a[key] = z
+	// 	}
+	// 	return true
+	// })
+	// t.members.DeleteMore(dis...)
 	return a
+}
+
+func (t *TCPManager) writeToSocket(target string, front bool, msgs ...*SendMessage) bool {
+	sid, ok := t.targetCache.Load(target)
+	if ok {
+		v, ok := t.members.LoadForUpdate(sid)
+		if ok {
+			return v.writeTo(target, front, msgs...)
+		}
+	}
+	return false
 }
 
 // WriteTo sends the given messages to the specified target connections.
@@ -89,7 +107,7 @@ func (t *TCPManager) WriteTo(target string, msgs ...*SendMessage) {
 	}
 	t.members.ForEachWithRLocker(func(key uint64, value *tcpCore) bool {
 		if value.writeTo(target, false, msgs...) {
-			t.fastHash.Store(target, value.sockID)
+			t.targetCache.Store(target, value.sockID)
 			return t.opt.multiTargets
 		}
 		return true
@@ -111,7 +129,7 @@ func (t *TCPManager) WriteToFront(target string, msgs ...*SendMessage) {
 	}
 	t.members.ForEachWithRLocker(func(key uint64, value *tcpCore) bool {
 		if value.writeTo(target, true, msgs...) {
-			t.fastHash.Store(target, value.sockID)
+			t.targetCache.Store(target, value.sockID)
 			return t.opt.multiTargets
 		}
 		return true
@@ -145,7 +163,7 @@ func (t *TCPManager) WriteToMultiTargets(msg *SendMessage, targets ...string) {
 				continue
 			}
 			if value.writeTo(a, false, msg) {
-				t.fastHash.Store(a, value.sockID)
+				t.targetCache.Store(a, value.sockID)
 				return t.opt.multiTargets
 			}
 		}
@@ -201,9 +219,35 @@ func (t *TCPManager) Listen() error {
 					if !t.shutdown.Load() {
 						t.members.Delete(cli.sockID)
 						t.recycle.Put(cli)
+						t.reportCache.Delete(fmt.Sprintf("%d", cli.sockID))
 					}
 				}()
-				cli.connect(conn, t.opt.helloMsg...)
+				cli.connect(conn, t.opt.helloMsg...) // conn
+				// checkhealth
+				go func() {
+					freport := func() {
+						x, ok := cli.healthReport()
+						t.reportCache.Store(fmt.Sprintf("%d", cli.sockID), &reportItem{
+							id:        cli.sockID,
+							connTime:  cli.timeConnection,
+							lastRead:  cli.timeLastRead,
+							lastWrite: cli.timeLastWrite,
+							msg:       x,
+							status:    ok,
+						})
+					}
+					time.Sleep(time.Second * 10)
+					freport()
+					t1 := time.NewTicker(time.Second * time.Duration(rand.Int31n(25)+25))
+					for !cli.closed.Load() {
+						select {
+						case <-cli.closeCtx.Done():
+							return
+						case <-t1.C:
+							freport()
+						}
+					}
+				}()
 				go func() {
 					defer func() {
 						if err := recover(); err != nil {
@@ -255,11 +299,13 @@ func NewTcpFactory(opts ...Options) (*TCPManager, error) {
 	if !ok {
 		return nil, fmt.Errorf("invalid bind address: %s", opt.bind)
 	}
+	rep := cache.NewAnyCache[*reportItem](time.Second * 50)
+	rep.SetCleanUp(time.Minute * 3)
 	sid := atomic.Uint64{}
 	return &TCPManager{
-		addr:     b,
-		opt:      &opt,
-		fastHash: mapfx.NewBaseMap[uint64](),
+		addr:        b,
+		opt:         &opt,
+		targetCache: mapfx.NewBaseMap[uint64](),
 		recycle: gopool.New(
 			func() *tcpCore {
 				t1 := time.NewTimer(time.Minute)
@@ -300,7 +346,8 @@ func NewTcpFactory(opts ...Options) (*TCPManager, error) {
 		// 		}
 		// 	},
 		// },
-		shutdown: atomic.Bool{},
-		members:  mapfx.NewStructMap[uint64, tcpCore](),
+		shutdown:    atomic.Bool{},
+		members:     mapfx.NewStructMap[uint64, tcpCore](),
+		reportCache: rep,
 	}, nil
 }

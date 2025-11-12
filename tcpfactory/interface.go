@@ -26,6 +26,15 @@ func ShutMeDown() *SendMessage {
 	return shutmedown
 }
 
+type reportItem struct {
+	id        uint64
+	connTime  time.Time
+	lastRead  time.Time
+	lastWrite time.Time
+	msg       any
+	status    bool
+}
+
 // Client defines the interface for handling TCP connection lifecycle and message processing.
 // It provides methods for connection events, data handling, logging, and client status reporting.
 type Client interface {

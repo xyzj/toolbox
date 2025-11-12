@@ -240,8 +240,6 @@ github.com/unrolled/secure v1.14.0 h1:u9vJTU/pR4Bny0ntLUMxdfLtmIRGvQf2sEFuA0TG9A
 github.com/unrolled/secure v1.14.0/go.mod h1:BmF5hyM6tXczk3MpQkFf1hpKSRqCyhqcbiQtiAF7+40=
 github.com/xyzj/deepcopy v0.0.0-20250124011539-76155efb897b h1:x59qvr1IJVTbANd0lw0SJdj1lE6MP0x5gbmsvIWW1sc=
 github.com/xyzj/deepcopy v0.0.0-20250124011539-76155efb897b/go.mod h1:TNGZXviljt+V3Jml641X2lSNKCS0ve9gv56+E5sVSnY=
-github.com/xyzj/go-pool v0.0.0-20250805013209-fed44622b5b4 h1:ngTNa7Ch7YQAXOQJRNRT4kJtjO783sgqSH40PlV+824=
-github.com/xyzj/go-pool v0.0.0-20250805013209-fed44622b5b4/go.mod h1:zXyjhmoo/L2OIo0OnZtnqmauOMwpKRbw5WBaW2s3+E4=
 github.com/xyzj/go-pool v0.0.0-20251112005302-e1ce0fd94675 h1:TmHVermvp28DobiCYFzF105vQkGS/Jozy6PNYShcofo=
 github.com/xyzj/go-pool v0.0.0-20251112005302-e1ce0fd94675/go.mod h1:zXyjhmoo/L2OIo0OnZtnqmauOMwpKRbw5WBaW2s3+E4=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
