@@ -22,19 +22,39 @@ const (
 	unitYearZh           = "年"
 	unitMonthZh          = "个月"
 	unitDayZh            = "天"
-	unitHourZh           = "小时"
-	unitMinuteZh         = "分钟"
-	unitSecondZh         = "秒"
 	unitLessThanDayZh    = "不到一天"
-	unitLessThanMinuteZh = "不到一分钟"
 	unitYearEn           = " years"
 	unitMonthEn          = " months"
 	unitDayEn            = " days"
 	unitHourEn           = " hours"
 	unitMinuteEn         = " minutes"
-	unitSecondEn         = " seconds"
 	unitLessThanDayEn    = "less than a day"
 	unitLessThanMinuteEn = "less than a minute"
+)
+
+type timeUnits struct {
+	Day               string
+	Hour              string
+	Minute            string
+	Second            string
+	LessThanOneMinute string
+}
+
+var (
+	TimeUnitsZh = timeUnits{
+		Day:               "天",
+		Hour:              "小时",
+		Minute:            "分钟",
+		Second:            "秒",
+		LessThanOneMinute: "不到1分钟",
+	}
+	TimeUnitsEn = timeUnits{
+		Day:               " day",
+		Hour:              " hour",
+		Minute:            " minute",
+		Second:            " second",
+		LessThanOneMinute: "less than 1 minute",
+	}
 )
 
 // GbkToUtf8 gbk编码转utf8
@@ -865,60 +885,7 @@ func ParseNumberRange(input string) ([]int64, error) {
 	return result, nil
 }
 
-// FormatSecondsHMS 把秒数格式化为 "XhYmZs" 的形式
-// 例如:
-//
-//	3661 -> "1h1m1s"
-//	61   -> "1m1s"
-//	45   -> "45s"
-func FormatSecondsHMS(sec int64, showSeconds, chinese bool) string {
-	unitsec := unitSecondEn
-	unitmin := unitMinuteEn
-	unithour := unitHourEn
-	unitless := unitLessThanMinuteEn
-	unitday := unitDayEn
-	if chinese {
-		unitday = unitDayZh
-		unitsec = unitSecondZh
-		unitmin = unitMinuteZh
-		unithour = unitHourZh
-		unitless = unitLessThanMinuteZh
-	}
-
-	if sec <= 0 {
-		if showSeconds {
-			return "0" + unitsec
-		}
-		return "0" + unitmin
-	}
-	d := sec / 3600 * 24
-	h := sec / 3600
-	sec = sec % 3600
-	m := sec / 60
-	s := sec % 60
-
-	var b strings.Builder
-	if d > 0 {
-		fmt.Fprintf(&b, "%d"+unitday, d)
-	}
-	if h > 0 {
-		fmt.Fprintf(&b, "%d"+unithour, h)
-	}
-	if m > 0 {
-		fmt.Fprintf(&b, "%d"+unitmin, m)
-	}
-	if showSeconds {
-		if s > 0 || b.Len() == 0 {
-			fmt.Fprintf(&b, "%d"+unitsec, s)
-		}
-	} else {
-		// 不显示秒：如果没有小时和分钟，则返回 "0m"
-		if b.Len() == 0 {
-			return unitless
-		}
-	}
-	return b.String()
-}
+// FormatBytes 将字节数转换为带单位的字符串表示形式
 func FormatBytes(bytes int64) string {
 	// 1. 处理零值和负值
 	if bytes < 0 {
@@ -959,4 +926,112 @@ func StringToFixedRightPad(s string, n int) []byte {
 	b := make([]byte, n)
 	copy(b, []byte(s)) // copy 会把最多 n 个字节复制进去，剩余保持为 0x00
 	return b
+}
+
+// durationOption 用于定义可选参数
+type durationOption struct {
+	ShowSeconds bool // 是否显示秒数
+	EnglishUnit bool // 单位是否使用英文 (Day/Hour/Minute/Second)
+}
+
+type DurationOptions func(opt *durationOption)
+
+func WithShowSeconds(t bool) DurationOptions {
+	return func(o *durationOption) {
+		o.ShowSeconds = t
+	}
+}
+
+func WithEnglishUnit(t bool) DurationOptions {
+	return func(o *durationOption) {
+		o.EnglishUnit = t
+	}
+}
+
+// FormatDuration 接受秒数和一个可选的 DurationOptions 结构体
+// 将秒数转换为 xx天xx小时xx分钟xx秒 的可读格式。
+func FormatDuration(seconds int64, opts ...DurationOptions) string {
+	if seconds < 0 {
+		return "Invalid duration"
+	}
+	opt := durationOption{}
+	for _, o := range opts {
+		o(&opt)
+	}
+	// 1. 定义时间单位的中文和英文名称
+	units := TimeUnitsZh
+	if opt.EnglishUnit {
+		units = TimeUnitsEn
+	}
+	if seconds < 60 {
+		// 处理小于60秒的特殊情况
+		if opt.ShowSeconds {
+			return formatUnit(seconds, units.Second, opt.EnglishUnit)
+		} else {
+			return units.LessThanOneMinute
+		}
+	}
+
+	// 2. 计算各个时间单位的值
+	days := seconds / (60 * 60 * 24)
+	seconds %= (60 * 60 * 24)
+
+	hours := seconds / (60 * 60)
+	seconds %= (60 * 60)
+
+	minutes := seconds / 60
+	seconds %= 60
+
+	// 3. 构建结果字符串
+	var parts []string
+
+	if days > 0 {
+		parts = append(parts, formatUnit(days, units.Day, opt.EnglishUnit))
+	}
+	if hours > 0 {
+		parts = append(parts, formatUnit(hours, units.Hour, opt.EnglishUnit))
+	}
+	if minutes > 0 {
+		parts = append(parts, formatUnit(minutes, units.Minute, opt.EnglishUnit))
+	}
+
+	// 4. 根据可选参数决定是否显示秒数
+	if opt.ShowSeconds && seconds > 0 {
+		parts = append(parts, formatUnit(seconds, units.Second, opt.EnglishUnit))
+	} else if len(parts) == 0 {
+		// 如果所有大单位都是 0，且不显示秒，那么返回 0 分钟
+		// 或者如果设置了显示秒，且秒数大于 0，但前面没有大单位，则直接显示秒
+		// 这里处理的是当 seconds > 0, 但秒被排除在外时，我们至少要显示最小的非零单位
+		if days == 0 && hours == 0 && minutes == 0 && seconds > 0 && !opt.ShowSeconds {
+			// 如果是小于一分钟且不显示秒，则显示为 0 分钟，或者根据实际需求处理。
+			// 这里我们倾向于在有值但不显示秒时，忽略秒。如果所有单位都为 0，且秒也被忽略，则需要返回一个值
+			parts = append(parts, formatUnit(0, units.Minute, opt.EnglishUnit))
+		}
+	}
+
+	// 如果 parts 仍然为空，说明秒数小于 60 且 ShowSeconds=false，我们强制显示为 1 分钟内的最小单位
+	if len(parts) == 0 && !opt.ShowSeconds && seconds > 0 {
+		// 遇到这种情况，最常见的做法是显示为 "0 小时" 或 "0 分钟"
+		return units.LessThanOneMinute
+	} else if len(parts) == 0 && seconds > 0 && opt.ShowSeconds {
+		// 如果只有秒数且要求显示秒
+		parts = append(parts, formatUnit(seconds, units.Second, opt.EnglishUnit))
+	}
+
+	// 5. 组装结果字符串
+	return strings.TrimSpace(strings.Join(parts, " "))
+}
+
+// formatUnit 负责将数字和单位组合，并处理英文单位的复数形式。
+func formatUnit(value int64, unit string, isEnglish bool) string {
+	if isEnglish {
+		// 英文单位需要处理复数 's'
+		if value > 1 || value == 0 { // 0 hours 也使用复数
+			if unit == " hour" || unit == " minute" || unit == " second" || unit == " day" {
+				return fmt.Sprintf("%d%ss", value, unit)
+			}
+		}
+	}
+	// 中文或单数英文直接拼接
+	return fmt.Sprintf("%d%s", value, unit)
 }

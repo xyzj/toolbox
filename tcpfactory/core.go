@@ -183,26 +183,19 @@ func (t *tcpCore) send() {
 	}
 }
 
-func (t *tcpCore) writeTo(target string, msgs ...*SendMessage) bool {
+func (t *tcpCore) writeTo(target string, front bool, msgs ...*SendMessage) bool {
 	if t.closed.Load() {
 		return false
 	}
 	if t.tcpClient.MatchTarget(target, false) {
-		for _, msg := range msgs {
-			t.sendQueue.Put(msg)
-		}
-		return true
-	}
-	return false
-}
-
-func (t *tcpCore) writeToFront(target string, msgs ...*SendMessage) bool {
-	if t.closed.Load() {
-		return false
-	}
-	if t.tcpClient.MatchTarget(target, false) {
-		for _, msg := range msgs {
-			t.sendQueue.PutFront(msg)
+		if front {
+			for _, msg := range msgs {
+				t.sendQueue.PutFront(msg)
+			}
+		} else {
+			for _, msg := range msgs {
+				t.sendQueue.Put(msg)
+			}
 		}
 		return true
 	}

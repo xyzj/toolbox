@@ -19,7 +19,7 @@ import (
 //	value类型支持 byte | int8 | int | int32 | int64 | float32 | float64 | string | struct{}
 //
 //	struct{} 用于空类型，用在使用map去重的场景，可以大大降低内存分配
-func NewBaseMap[T byte | int8 | int | int32 | int64 | float32 | float64 | string | struct{}]() *BaseMap[T] {
+func NewBaseMap[T byte | int8 | int | int32 | int64 | uint | uint32 | uint64 | float32 | float64 | string | struct{}]() *BaseMap[T] {
 	return &BaseMap[T]{
 		locker: sync.RWMutex{},
 		data:   make(map[string]T),
@@ -27,7 +27,7 @@ func NewBaseMap[T byte | int8 | int | int32 | int64 | float32 | float64 | string
 }
 
 // BaseMap 泛型map 对应各种基础类型
-type BaseMap[T byte | int8 | int | int32 | int64 | float32 | float64 | string | struct{}] struct {
+type BaseMap[T byte | int8 | int | int32 | int64 | uint | uint32 | uint64 | float32 | float64 | string | struct{}] struct {
 	locker sync.RWMutex
 	data   map[string]T
 }

@@ -23,7 +23,21 @@ type TCPManager struct {
 	addr     *net.TCPAddr
 	// recycle  sync.Pool
 	recycle  *gopool.GoPool[*tcpCore]
+	fastHash *mapfx.BaseMap[uint64]
 	shutdown atomic.Bool
+}
+
+func (t *TCPManager) writeToSocket(target string, front bool, msgs ...*SendMessage) bool {
+	sid, ok := t.fastHash.Load(target)
+	if ok {
+		v, ok := t.members.LoadForUpdate(sid)
+		if ok {
+			if front {
+				return v.writeTo(target, front, msgs...)
+			}
+		}
+	}
+	return false
 }
 
 func (t *TCPManager) HealthReport() map[uint64]any {
@@ -70,8 +84,12 @@ func (t *TCPManager) WriteTo(target string, msgs ...*SendMessage) {
 	if len(msgs) == 0 || strings.TrimSpace(target) == "" {
 		return
 	}
+	if t.writeToSocket(target, false, msgs...) {
+		return
+	}
 	t.members.ForEachWithRLocker(func(key uint64, value *tcpCore) bool {
-		if value.writeTo(target, msgs...) {
+		if value.writeTo(target, false, msgs...) {
+			t.fastHash.Store(target, value.sockID)
 			return t.opt.multiTargets
 		}
 		return true
@@ -88,8 +106,12 @@ func (t *TCPManager) WriteToFront(target string, msgs ...*SendMessage) {
 	if len(msgs) == 0 || strings.TrimSpace(target) == "" {
 		return
 	}
+	if t.writeToSocket(target, true, msgs...) {
+		return
+	}
 	t.members.ForEachWithRLocker(func(key uint64, value *tcpCore) bool {
-		if value.writeToFront(target, msgs...) {
+		if value.writeTo(target, true, msgs...) {
+			t.fastHash.Store(target, value.sockID)
 			return t.opt.multiTargets
 		}
 		return true
@@ -110,12 +132,20 @@ func (t *TCPManager) WriteToMultiTargets(msg *SendMessage, targets ...string) {
 	if msg == nil || len(targets) == 0 {
 		return
 	}
+	nt := make([]string, 0, len(targets))
+	for _, a := range targets {
+		if t.writeToSocket(a, false, msg) {
+			continue
+		}
+		nt = append(nt, a)
+	}
 	t.members.ForEachWithRLocker(func(key uint64, value *tcpCore) bool {
-		for _, a := range targets {
+		for _, a := range nt {
 			if strings.TrimSpace(a) == "" {
 				continue
 			}
-			if value.writeTo(a, msg) {
+			if value.writeTo(a, false, msg) {
+				t.fastHash.Store(a, value.sockID)
 				return t.opt.multiTargets
 			}
 		}
@@ -227,8 +257,9 @@ func NewTcpFactory(opts ...Options) (*TCPManager, error) {
 	}
 	sid := atomic.Uint64{}
 	return &TCPManager{
-		addr: b,
-		opt:  &opt,
+		addr:     b,
+		opt:      &opt,
+		fastHash: mapfx.NewBaseMap[uint64](),
 		recycle: gopool.New(
 			func() *tcpCore {
 				t1 := time.NewTimer(time.Minute)
@@ -246,8 +277,7 @@ func NewTcpFactory(opts ...Options) (*TCPManager, error) {
 					logg:               opt.logg,
 				}
 			},
-			gopool.WithMaxPoolSize(int(opt.poolSize)),
-			gopool.WithWarmCount(int(opt.poolSize)/2),
+			gopool.WithMaxIdleSize(uint32(opt.poolSize)),
 		),
 		// recycle: sync.Pool{
 		// 	New: func() any {
