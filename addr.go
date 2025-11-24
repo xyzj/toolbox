@@ -316,3 +316,22 @@ func IPv6ToInt32Segments(s string) ([]byte, error) {
 	}
 	return out, nil
 }
+func IsValidIP(ipStr string) (string, bool) {
+	ipStr = strings.TrimSpace(ipStr)
+	if ipStr == "" {
+		return "", false
+	}
+
+	// 使用 net.ParseIP 解析
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return "", false
+	}
+
+	// 检查是否为 IPv6（非 IPv4）
+	// 如果 To4() 返回 nil，说明是纯 IPv6 地址
+	if ip.To4() == nil {
+		return "v6", true
+	}
+	return "v4", true
+}

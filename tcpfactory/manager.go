@@ -157,6 +157,9 @@ func (t *TCPManager) WriteToMultiTargets(msg *SendMessage, targets ...string) {
 		}
 		nt = append(nt, a)
 	}
+	if len(nt) == 0 {
+		return
+	}
 	t.members.ForEachWithRLocker(func(key uint64, value *tcpCore) bool {
 		for _, a := range nt {
 			if strings.TrimSpace(a) == "" {

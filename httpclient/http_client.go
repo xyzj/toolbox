@@ -9,12 +9,15 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/xyzj/toolbox/crypto"
 	json "github.com/xyzj/toolbox/json"
 	"github.com/xyzj/toolbox/logger"
 )
 
 var (
 	hc = New()
+
+	codeZstd = crypto.NewCompressor(crypto.CompressZstd)
 )
 
 func DoRequestWithTimeout(req *http.Request, timeout time.Duration) (int, []byte, map[string]string, error) {
@@ -66,8 +69,9 @@ func WithLogger(l logger.Logger) HTTPOptions {
 var defaultReqOpt = reqOptions{timeout: time.Second * 10}
 
 type reqOptions struct {
-	timeout time.Duration
-	logreq  bool
+	timeout    time.Duration
+	logreq     bool
+	compressed bool
 }
 type ReqOptions func(opt *reqOptions)
 
@@ -84,6 +88,12 @@ func WithLogRequest() ReqOptions {
 func WithTimeout(t time.Duration) ReqOptions {
 	return func(o *reqOptions) {
 		o.timeout = t
+	}
+}
+
+func WithRespCompressed(b bool) ReqOptions {
+	return func(o *reqOptions) {
+		o.compressed = b
 	}
 }
 
@@ -124,6 +134,9 @@ func (c *Client) makeRequest(req *http.Request, opts ...ReqOptions) (*http.Reque
 		case "POST":
 			req.Header.Set(HEADER_CONTENT_TYPE, HEADER_VALUE_JSON)
 		}
+	}
+	if c.opt.compressed {
+		req.Header.Set(HEADER_COMPRESSED, HEADER_VALUE_ZSTD)
 	}
 	timeoCtx, cancel := context.WithTimeout(context.Background(), c.opt.timeout)
 	return req.WithContext(timeoCtx), cancel
@@ -235,13 +248,18 @@ func (c *Client) DoRequest(req *http.Request, opts ...ReqOptions) (int, []byte, 
 		c.logg.Error(fmt.Sprintf(LogErrFormater, sc, req.Method, req.URL.String(), err.Error()))
 		return sc, nil, nil, err
 	}
-
 	// Collect response headers
 	h := make(map[string]string)
 	h[HEADER_RESP_FROM] = req.URL.Host
 	h[HEADER_RESP_DURATION] = time.Since(start).String()
 	for k := range resp.Header {
 		h[k] = resp.Header.Get(k)
+	}
+	if len(b) > 0 && h[HEADER_COMPRESSED] == HEADER_VALUE_ZSTD {
+		ub, err := codeZstd.Decode(b)
+		if err == nil {
+			b = ub
+		}
 	}
 	// 日志
 	if c.opt.logreq {

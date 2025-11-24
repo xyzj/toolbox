@@ -75,6 +75,7 @@ func (u *Ring[T]) Clear() {
 	u.locker.Lock()
 	u.data.Do(func(a any) {
 		u.data.Value = nil
+		u.data = u.data.Next()
 	})
 	u.locker.Unlock()
 }
