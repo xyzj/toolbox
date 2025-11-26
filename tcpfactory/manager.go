@@ -33,6 +33,13 @@ func (t *TCPManager) HealthReport() map[uint64]any {
 	// dis := make([]uint64, 0, t.members.Len())
 	a := make(map[uint64]any, t.members.Len())
 	t.reportCache.ForEach(func(key string, value *reportItem) bool {
+		if value.shutdown {
+			xc, ok := t.members.LoadForUpdate(value.id)
+			if ok {
+				xc.disconnect("client said shutdown")
+			}
+			return true
+		}
 		if time.Since(value.lastRead) > t.opt.readTimeout+time.Second*20 {
 			xc, ok := t.members.LoadForUpdate(value.id)
 			if ok {
@@ -229,7 +236,7 @@ func (t *TCPManager) Listen() error {
 				// checkhealth
 				go func() {
 					freport := func() {
-						x, ok := cli.healthReport()
+						x, ok, shutdown := cli.healthReport()
 						t.reportCache.Store(fmt.Sprintf("%d", cli.sockID), &reportItem{
 							id:        cli.sockID,
 							connTime:  cli.timeConnection,
@@ -237,6 +244,7 @@ func (t *TCPManager) Listen() error {
 							lastWrite: cli.timeLastWrite,
 							msg:       x,
 							status:    ok,
+							shutdown:  shutdown,
 						})
 					}
 					time.Sleep(time.Second * 10)

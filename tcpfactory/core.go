@@ -202,9 +202,9 @@ func (t *tcpCore) writeTo(target string, front bool, msgs ...*SendMessage) bool 
 	return false
 }
 
-func (t *tcpCore) healthReport() (any, bool) {
+func (t *tcpCore) healthReport() (any, bool, bool) {
 	if t.closed.Load() {
-		return "", false
+		return "", false, false
 	}
 	return t.tcpClient.Report()
 }
