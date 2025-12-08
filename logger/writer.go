@@ -1,125 +1,29 @@
-/*
-Package logger 日志专用写入器，可设置是否自动依据日期以及文件大小滚动日志文件
-*/
 package logger
 
 import (
+	"bufio"
 	"bytes"
-	"fmt"
+	"compress/flate"
+	"context"
 	"io"
 	"os"
-	"path/filepath"
-	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/xyzj/toolbox/crypto"
+	"github.com/klauspost/compress/zstd"
 	"github.com/xyzj/toolbox/json"
 	"github.com/xyzj/toolbox/loopfunc"
 	"github.com/xyzj/toolbox/pathtool"
 )
 
-const (
-	fileTimeFormat = "060102"           // 日志文件命名格式
-	maxFileSize    = 1024 * 1024 * 1000 // 1000mb
-	// ShortTimeFormat 日志事件戳格式
-	ShortTimeFormat = "15:04:05.000 "
-	LongTimeFormat  = "Jan 02 15:04:05.000 " // 2006-01-02 15:04:05.000 "
-)
-
-var (
-	lineEnd = []byte{10}
-	comp    = crypto.NewCompressor(crypto.CompressZstd)
-)
-
-func NewConsoleWriter() io.Writer {
-	w := &Writer{
-		timeFormat:  LongTimeFormat,
-		fno:         os.Stdout,
-		chanGoWrite: make(chan *logData, 2000),
-		// out:        os.Stdout,
-	}
-	w.startWrite()
-	return w
-}
-
-// NewWriter 一个新的log写入器
-//
-// opt: 日志写入器配置
-func NewWriter(opts ...Options) io.Writer {
-	opt := &opt{
-		filedir: pathtool.GetExecDir(),
-	}
-	for _, o := range opts {
-		o(opt)
-	}
-	if opt.filename == "" {
-		return NewConsoleWriter()
-	}
-	t := time.Now()
-	mylog := &Writer{
-		// out:          os.Stdout,
-		expired:      int64(opt.filedays)*24*60*60 - 10,
-		fileFileSize: opt.filesize,
-		fname:        opt.filename,
-		rollfile:     opt.autoroll,
-		fileDay:      t.Day(),
-		fileHour:     t.Hour(),
-		logDir:       opt.filedir,
-		chanGoWrite:  make(chan *logData, 2000),
-		enablegz:     opt.compressfile,
-		withFile:     opt.filename != "",
-		timeFormat:   LongTimeFormat,
-	}
-	if opt.autoroll {
-		mylog.timeFormat = ShortTimeFormat
-	}
-	if opt.filename != "" && opt.autoroll {
-		ymd := t.Format(fileTimeFormat)
-		for i := byte(255); i > 0; i-- {
-			if pathtool.IsExist(filepath.Join(mylog.logDir, fmt.Sprintf("%s.%s.%d.log", mylog.fname, ymd, i))) {
-				mylog.fileIndex = i
-				break
-			}
-		}
-		// for i := 1; i < 255; i++ {
-		// 	if !pathtool.IsExist(filepath.Join(mylog.logDir, fmt.Sprintf("%s.%s.%d.log", mylog.fname, ymd, i))) {
-		// 		mylog.fileIndex = byte(i) - 1
-		// 		break
-		// 	}
-		// }
-	}
-	mylog.newFile()
-	mylog.startWrite()
-	return mylog
-}
-
-// Writer 自定义Writer
-type Writer struct {
-	chanGoWrite  chan *logData
-	fno          *os.File
-	pathNow      string
-	fname        string
-	nameNow      string
-	nameOld      string
-	logDir       string
-	timeFormat   string
-	expired      int64
-	fileFileSize int64
-	fileDay      int
-	fileHour     int
-	fileIndex    byte
-	enablegz     bool
-	rollfile     bool
-	withFile     bool
-	// delayWrite   bool
-}
 type logData struct {
-	t string
+	t time.Time
 	d []byte
 }
 
-func (l *logData) Bytes() []byte {
-	xp := json.Bytes(l.t)
+func (l *logData) Bytes(timeformat string) []byte {
+	xp := json.Bytes(l.t.Format(timeformat))
 	xp = append(xp, l.d...)
 	if !bytes.HasSuffix(xp, lineEnd) {
 		xp = append(xp, lineEnd...)
@@ -127,192 +31,169 @@ func (l *logData) Bytes() []byte {
 	return xp
 }
 
-// Write 异步写入日志，返回固定为 0, nil
-func (w *Writer) Write(p []byte) (n int, err error) {
-	// xp := &logData{
-	// 	t: time.Now().Format(w.timeFormat),
-	// 	d: p,
-	// }
-	// if w.withFile {
-	w.chanGoWrite <- &logData{
-		t: time.Now().Format(w.timeFormat),
-		d: p,
-	}
-	// } else {
-	// 	w.fno.Write(xp.Bytes())
-	// }
-	// if w.withFile {
-	// 	if w.delayWrite {
-	// w.chanGoWrite <- xp
-	// } else {
-	// 	w.fno.Write(xp)
-	// }
-	// } else {
-	// 	w.out.Write(xp)
-	// }
-	return 0, nil
+type Writer struct {
+	cnf         *writerOpt
+	buff        *bufio.Writer
+	fno         *os.File
+	ctxClose    context.Context
+	ctxCancel   context.CancelFunc
+	currentSize atomic.Int64
+	closeOnce   sync.Once
+	locker      sync.Mutex
+	chanWorker  chan *logData
+	closed      atomic.Bool
 }
 
-func (w *Writer) startWrite() {
-	// if !w.withFile {
-	// 	return
-	// }
-	go loopfunc.LoopFunc(func(params ...any) {
-		tc := time.NewTicker(time.Minute * 10)
-		defer tc.Stop()
-		for {
-			select {
-			case <-tc.C:
-				if w.rollfile {
-					w.rollingFileNoLock()
-				}
-			case msg := <-w.chanGoWrite:
-				w.fno.Write(msg.Bytes())
-			}
-		}
-		// for range tc.C {
-		// 	if w.rollfile {
-		// 		w.rollingFileNoLock()
-		// 	}
-		// }
-	}, "log writer", nil)
-}
-
-// 创建新日志文件
-func (w *Writer) newFile() {
-	if !w.withFile {
-		return
-	}
-	if w.rollfile {
-		t := time.Now()
-		if w.fileDay != t.Day() {
-			w.fileDay = t.Day()
-			w.fileIndex = 0
-		}
-		w.nameNow = fmt.Sprintf("%s.%s.%d.log", w.fname, t.Format(fileTimeFormat), w.fileIndex)
-	} else {
-		w.nameNow = fmt.Sprintf("%s.log", w.fname)
-	}
-	if w.nameOld == w.nameNow {
-		return
-	}
-	// 关闭旧fno
-	if w.fno != nil {
-		w.fno.Close()
-	}
-	if !pathtool.IsExist(w.logDir) {
-		os.MkdirAll(w.logDir, 0o755)
-	}
-	w.pathNow = filepath.Join(w.logDir, w.nameNow)
-	// 直接写入当日日志
+func (w *Writer) openfile() error {
 	var err error
-	w.fno, err = os.OpenFile(w.pathNow, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o664)
+	w.fno, err = os.OpenFile(w.cnf.filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o664)
 	if err != nil {
-		os.WriteFile("logerr.log", []byte("log file open error: "+err.Error()), 0o664)
-		w.withFile = false
-		return
+		return err
 	}
-	w.withFile = true
-	// 判断是否压缩旧日志
-	if w.enablegz {
-		w.zipFile(w.nameOld)
+	info, err := w.fno.Stat()
+	if err != nil {
+		return err
 	}
-	// w.fno.Write(lineEnd)
+	w.currentSize.Store(int64(info.Size()))
+	w.buff.Reset(w.fno)
+	return nil
 }
 
-// 检查文件大小,返回是否需要切分文件
-func (w *Writer) rolledWithFileSize() bool {
-	// if w.fileHour == time.Now().Hour() {
-	// 	return false
-	// }
-	w.nameOld = w.nameNow
-	w.fileHour = time.Now().Hour()
-	fs, ex := os.Stat(w.pathNow)
-	if ex == nil {
-		if fs.Size() > w.fileFileSize {
-			if w.fileIndex == 255 {
-				w.fileIndex = 0
-			} else {
-				w.fileIndex++
-			}
-			return true
-		}
-	}
-	return false
-}
-
-func (w *Writer) rollingFileNoLock() bool {
-	if time.Now().Day() == w.fileDay && !w.rolledWithFileSize() {
-		return false
-	}
-	// t := time.Now()
-	// w.nameNow = fmt.Sprintf("%s.%v.%d.log", w.fname, t.Format(fileTimeFormat), w.fileIndex)
-	// // 比对文件名，若不同则重新设置io
-	// if w.nameNow == w.nameOld {
-	// 	return false
-	// }
-	// 创建新日志
-	w.newFile()
-	// 清理旧日志
-	w.clearFile()
-
-	return true
-}
-
-// 压缩旧日志
-func (w *Writer) zipFile(s string) {
-	if !w.enablegz || len(s) == 0 {
-		return
-	}
-	if xs := filepath.Join(w.logDir, s); pathtool.IsExist(xs) {
-		go func(s string) {
-			b, err := os.ReadFile(s)
-			if err != nil {
-				w.Write([]byte("read log file error: " + s + " " + err.Error()))
-				return
-			}
-			bb, err := comp.Encode(b)
-			if err != nil {
-				w.Write([]byte("compress log file error: " + s + " " + err.Error()))
-				return
-			}
-			os.WriteFile(s+".zst", bb, 0o664)
-			time.Sleep(time.Second * 5)
-			os.Remove(s)
-		}(xs)
-	}
-}
-
-// 清理旧日志
-func (w *Writer) clearFile() {
-	// 若未设置超时，则不清理
-	if !w.rollfile || w.expired <= 0 {
-		return
-	}
-	go func() {
-		defer func() { recover() }()
-		// 遍历文件夹
-		lstfno, ex := os.ReadDir(w.logDir)
-		if ex != nil {
-			w.Write([]byte("clear log files error: " + ex.Error()))
+func (w *Writer) Close() error {
+	w.locker.Lock()
+	defer w.locker.Unlock()
+	w.closeOnce.Do(func() {
+		w.closed.Store(true)
+		if w.cnf.filename == "" {
 			return
 		}
-		t := time.Now().Unix()
-		for _, d := range lstfno {
-			if d.IsDir() { // 忽略目录，不含日志名的文件，以及当前文件
-				continue
-			}
-			fno, err := d.Info()
-			if err != nil {
-				continue
-			}
-			if !strings.Contains(fno.Name(), w.fname) {
-				continue
-			}
-			// 比对文件生存期
-			if t-fno.ModTime().Unix() >= w.expired {
-				os.Remove(filepath.Join(w.logDir, fno.Name()))
-			}
+		w.ctxCancel()
+		close(w.chanWorker)
+		if w.buff.Available() > 0 {
+			w.buff.Flush()
 		}
-	}()
+		if w.fno != nil {
+			w.fno.Close()
+			w.fno = nil
+			return
+		}
+	})
+	return nil
+}
+
+func (w *Writer) Write(b []byte) (n int, err error) {
+	w.locker.Lock()
+	defer w.locker.Unlock()
+	if w.closed.Load() {
+		return 0, nil
+	}
+	l := &logData{
+		t: time.Now(),
+		d: b,
+	}
+	if w.cnf.filename == "" {
+		return w.fno.Write(l.Bytes(w.cnf.timeformat))
+	}
+	w.chanWorker <- l
+	return len(b), nil
+}
+
+func NewWriter(opts ...writerOpts) io.Writer {
+	opt := defaultWriterOpts()
+	for _, o := range opts {
+		o(opt)
+	}
+	ctxClose, ctxCancel := context.WithCancel(context.Background())
+	w := &Writer{
+		cnf:         opt,
+		chanWorker:  make(chan *logData, 200),
+		currentSize: atomic.Int64{},
+		buff:        bufio.NewWriterSize(os.Stdout, 8192*4),
+		ctxClose:    ctxClose,
+		ctxCancel:   ctxCancel,
+		locker:      sync.Mutex{},
+		closeOnce:   sync.Once{},
+		closed:      atomic.Bool{},
+	}
+	if opt.filename != "" {
+		go loopfunc.LoopFunc(func(params ...any) {
+			if err := w.openfile(); err != nil {
+				panic(err)
+			}
+			for {
+				select {
+				case <-w.ctxClose.Done():
+					return
+				case ld := <-w.chanWorker:
+					bs := ld.Bytes(w.cnf.timeformat)
+					n, _ := w.buff.Write(bs)
+					// 如果是文件输出，执行文件相关操作
+					if w.cnf.maxsize > 0 {
+						w.currentSize.Add(int64(n))
+						if w.currentSize.Load() >= w.cnf.maxsize {
+							w.buff.Flush()
+							w.fno.Close()
+							oldfile := w.cnf.filename + "." + time.Now().Format(w.cnf.backupformat)
+							os.Rename(w.cnf.filename, oldfile)
+							if err := w.openfile(); err != nil {
+								panic(err)
+							}
+							go func() {
+								switch w.cnf.compress {
+								case CompressSnappy:
+									compressFileSnappy(oldfile)
+								case CompressZstd:
+									compressFileZstd(oldfile, zstd.SpeedFastest)
+								case CompressGzip:
+									compressFileGzip(oldfile, flate.BestSpeed)
+								}
+								if w.cnf.maxbackups == 0 && w.cnf.maxdays == 0 {
+									return
+								}
+								// 定期清理过期日志
+								olderthen := time.Time{}
+								files, _ := pathtool.SearchFilesByTime(w.cnf.dir, w.cnf.file)
+								if len(files) < 2 {
+									return
+								}
+								delfiles := make([]string, 0, len(files))
+								keepfiles := make([]string, 0, len(files))
+								if w.cnf.maxdays > 0 {
+									olderthen = time.Now().AddDate(0, 0, -w.cnf.maxdays)
+								}
+								for _, f := range files {
+									if f.Path == w.cnf.filename {
+										continue
+									}
+									if !olderthen.IsZero() && f.ModTime.Before(olderthen) {
+										delfiles = append(delfiles, f.Path)
+										continue
+									}
+									keepfiles = append(keepfiles, f.Path)
+								}
+								if l := len(keepfiles); l > w.cnf.maxbackups {
+									delfiles = append(delfiles, keepfiles[:l-w.cnf.maxbackups]...)
+								}
+								if len(delfiles) > 0 {
+									for _, f := range delfiles {
+										os.Remove(f)
+									}
+								}
+							}()
+						}
+					}
+				}
+			}
+		}, "log writer", os.Stdout)
+	}
+	return w
+}
+
+func NewConsoleWriter() io.Writer {
+	o := defaultWriterOpts()
+	o.maxsize = 0
+	return &Writer{
+		fno: os.Stdout,
+		cnf: o,
+	}
 }

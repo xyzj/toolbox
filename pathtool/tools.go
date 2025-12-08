@@ -6,7 +6,9 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"sort"
 	"strings"
+	"time"
 )
 
 // SliceFlag 切片型参数，仅支持字符串格式
@@ -139,4 +141,89 @@ func FormatFileSize(size int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(size)/float64(div), "KMGTPE"[exp])
+}
+
+// EnsureDirAndSplit 将输入路径分离为目录和文件名，并确保目录存在。
+// 支持绝对路径和相对路径。如果输入以路径分隔符结尾或表示目录，则返回目录（绝对路径）和空文件名。
+// 返回值：dir（绝对目录路径）, filename（文件名或空）, err（出错返回非 nil）。
+func EnsureDirAndSplit(p string) (string, string, error) {
+	if strings.TrimSpace(p) == "" {
+		return "", "", fmt.Errorf("empty path")
+	}
+
+	// 规范化路径
+	p = filepath.Clean(p)
+
+	// 如果输入以路径分隔符结尾，视为目录
+	if strings.HasSuffix(p, string(os.PathSeparator)) || p == "." || p == ".." {
+		absDir, err := filepath.Abs(p)
+		if err != nil {
+			return "", "", err
+		}
+		if err := os.MkdirAll(absDir, 0o755); err != nil {
+			return "", "", err
+		}
+		return absDir, "", nil
+	}
+
+	// 分离文件名和目录
+	filename := filepath.Base(p)
+	dir := filepath.Dir(p)
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return "", "", err
+	}
+
+	// 创建目录（如果不存在）
+	if err := os.MkdirAll(absDir, 0o755); err != nil {
+		return "", "", err
+	}
+
+	return absDir, filename, nil
+}
+
+type FileInfo struct {
+	Path    string
+	ModTime time.Time
+}
+
+// SearchFilesByTime 在指定目录 dir 下搜索文件名包含 name 的所有文件。
+// 返回的文件列表按修改时间升序排列（旧 -> 新）。
+// 仅搜索当前目录，不递归进入子目录。
+func SearchFilesByTime(dir, name string) ([]FileInfo, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	var files []FileInfo
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if strings.Contains(entry.Name(), name) {
+			info, err := entry.Info()
+			if err != nil {
+				continue
+			}
+			files = append(files, FileInfo{
+				Path:    filepath.Join(dir, entry.Name()),
+				ModTime: info.ModTime(),
+			})
+		}
+	}
+
+	// 按修改时间排序
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].ModTime.Before(files[j].ModTime)
+	})
+
+	return files, nil
+	// 提取路径
+	// result := make([]string, len(files))
+	// for i, f := range files {
+	// 	result[i] = f.path
+	// }
+	// return result, nil
 }

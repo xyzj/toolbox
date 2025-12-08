@@ -17,24 +17,25 @@ import (
 )
 
 type tcpCore struct {
-	conn               *net.TCPConn                      // 连接实例
-	sendQueue          *queue.HighLowQueue[*SendMessage] // 发送队列
-	closeOnce          *sync.Once                        // 关闭事件
-	readCache          *bytes.Buffer                     // 数据读取临时缓存
-	tcpClient          Client                            // 设备功能模块
-	logg               logger.Logger                     // 日志记录
-	timeConnection     time.Time                         // 连接时间
-	timeLastWrite      time.Time                         // 上次发送时间
-	timeLastRead       time.Time                         // 上次数据读取时间
-	readTimeout        time.Duration                     // 读取超时
-	writeTimeout       time.Duration                     // 发送超时
-	writeIntervalTimer *time.Timer                       // 发送间隔计时
-	closeCtx           context.Context                   // 关闭上下文
-	closeFunc          context.CancelFunc                // 关闭事件
-	readBuffer         []byte                            // 读取缓存
-	sockID             uint64                            // 实例id
-	remoteAddr         string                            // 远端地址
-	closed             atomic.Bool                       // 是否已关闭
+	conn               *net.TCPConn                       // 连接实例
+	sendQueue          *queue.PriorityQueue[*SendMessage] // 发送队列
+	closeOnce          *sync.Once                         // 关闭事件
+	readCache          *bytes.Buffer                      // 数据读取临时缓存
+	writeIntervalTimer *time.Timer                        // 发送间隔计时
+	tcpClient          Client                             // 设备功能模块
+	logg               logger.Logger                      // 日志记录
+	timeConnection     time.Time                          // 连接时间
+	timeLastWrite      time.Time                          // 上次发送时间
+	timeLastRead       time.Time                          // 上次数据读取时间
+	sendQueueTimeout   time.Duration                      // 发送队列获取超时
+	readTimeout        time.Duration                      // 读取超时
+	writeTimeout       time.Duration                      // 发送超时
+	closeCtx           context.Context                    // 关闭上下文
+	closeFunc          context.CancelFunc                 // 关闭事件
+	readBuffer         []byte                             // 读取缓存
+	sockID             uint64                             // 实例id
+	remoteAddr         string                             // 远端地址
+	closed             atomic.Bool                        // 是否已关闭
 }
 
 func (t *tcpCore) formatLog(s string) string {
@@ -54,34 +55,15 @@ func (t *tcpCore) connect(conn *net.TCPConn, msgs ...*SendMessage) {
 	t.logg.Info(t.formatLog("new connection established with id:" + fmt.Sprintf("%d", t.sockID)))
 	t.tcpClient.OnConnect(conn)
 	for _, msg := range msgs {
-		t.sendQueue.Put(msg)
+		t.sendQueue.Put(queue.PriorityLow, msg)
 	}
-	// loopfunc.GoFunc(func(params ...any) {
-	// 	t1 := time.NewTicker(time.Second)
-	// 	t1.Stop()
-	// for _, msg := range msgs {
-	// 	if t.closed.Load() {
-	// 		return
-	// 	}
-	// if len(msg.Data) == 0 && msg.Interval > 0 {
-	// 	t1.Reset(msg.Interval)
-	// 	select {
-	// 	case <-t1.C:
-	// 	case <-t.closeCtx.Done():
-	// 		return
-	// 	}
-	// } else {
-	// 	t.sendQueue.Put(msg)
-	// }
-	// 	}
-	// }, "say hello", t.logg.DefaultWriter())
 }
 
 func (t *tcpCore) disconnect(s string) {
 	t.closeOnce.Do(func() {
 		t.closed.Store(true)
-		t.conn.Close()
 		t.closeFunc()
+		t.conn.Close()
 		t.sendQueue.Close()
 		t.readCache.Reset()
 		t.writeIntervalTimer.Stop()
@@ -130,7 +112,7 @@ func (t *tcpCore) recv() {
 		}
 		if len(echo) > 0 {
 			for _, s := range echo {
-				t.sendQueue.PutFront(s)
+				t.sendQueue.Put(queue.PriorityHighest, s)
 			}
 		}
 	}
@@ -138,11 +120,89 @@ func (t *tcpCore) recv() {
 
 func (t *tcpCore) send() {
 	var msg *SendMessage
-	var ok bool
+	var err error
+	ctx, cancel := context.WithTimeout(t.closeCtx, t.sendQueueTimeout)
+	defer cancel()
+	if msg, err = t.sendQueue.GetWithContext(ctx); err != nil {
+		return
+	}
+	if t.closed.Load() {
+		return
+	}
+	if msg == shutmedown {
+		t.disconnect("shut me down!")
+		return
+	}
+	if len(msg.Data) > 0 {
+		if t.writeTimeout > 0 {
+			err = t.conn.SetWriteDeadline(time.Now().Add(t.writeTimeout))
+			if err != nil {
+				t.disconnect("set send timeout error: " + err.Error())
+				return
+			}
+		}
+		_, err = t.conn.Write(msg.Data)
+		if err != nil {
+			t.disconnect("send error: " + err.Error())
+			return
+		}
+		t.timeLastWrite = time.Now()
+		t.logg.Debug(t.formatLog("send:" + hex.EncodeToString(msg.Data)))
+		t.tcpClient.OnSend(msg.Data)
+	}
+	if msg.Interval > 0 {
+		t.writeIntervalTimer.Reset(msg.Interval)
+		select {
+		case <-t.writeIntervalTimer.C:
+			return
+		case <-t.closeCtx.Done():
+			return
+		}
+	}
+}
+
+func (t *tcpCore) sendMsg(msg *SendMessage) {
+	var err error
+	if t.closed.Load() {
+		return
+	}
+	if len(msg.Data) > 0 {
+		if t.writeTimeout > 0 {
+			err = t.conn.SetWriteDeadline(time.Now().Add(t.writeTimeout))
+			if err != nil {
+				t.disconnect("set send timeout error: " + err.Error())
+				return
+			}
+		}
+		_, err = t.conn.Write(msg.Data)
+		if err != nil {
+			t.disconnect("send error: " + err.Error())
+			return
+		}
+		t.timeLastWrite = time.Now()
+		t.logg.Debug(t.formatLog("send:" + hex.EncodeToString(msg.Data)))
+		t.tcpClient.OnSend(msg.Data)
+	}
+	if msg.Interval > 0 {
+		t.writeIntervalTimer.Reset(msg.Interval)
+		select {
+		case <-t.writeIntervalTimer.C:
+			return
+		case <-t.closeCtx.Done():
+			return
+		}
+	}
+}
+func (t *tcpCore) sendLoop() {
+	var msg *SendMessage
 	var err error
 	for !t.closed.Load() {
-		if msg, ok = t.sendQueue.Get(); ok {
+		if msg, err = t.sendQueue.Get(); err == nil {
 			if t.closed.Load() {
+				return
+			}
+			if msg == shutmedown {
+				t.disconnect("shut me down!")
 				return
 			}
 			if t.writeTimeout > 0 {
@@ -151,10 +211,6 @@ func (t *tcpCore) send() {
 					t.disconnect("set send timeout error: " + err.Error())
 					return
 				}
-			}
-			if msg == shutmedown {
-				t.disconnect("shut me down!")
-				return
 			}
 			if len(msg.Data) > 0 {
 				_, err = t.conn.Write(msg.Data)
@@ -172,7 +228,6 @@ func (t *tcpCore) send() {
 				case <-t.writeIntervalTimer.C:
 					continue
 				case <-t.closeCtx.Done():
-					t.disconnect("send close")
 					return
 				}
 			}
@@ -183,19 +238,13 @@ func (t *tcpCore) send() {
 	}
 }
 
-func (t *tcpCore) writeTo(target string, front bool, msgs ...*SendMessage) bool {
+func (t *tcpCore) writeTo(priority queue.Priority, target string, msgs ...*SendMessage) bool {
 	if t.closed.Load() {
 		return false
 	}
 	if t.tcpClient.MatchTarget(target, false) {
-		if front {
-			for _, msg := range msgs {
-				t.sendQueue.PutFront(msg)
-			}
-		} else {
-			for _, msg := range msgs {
-				t.sendQueue.Put(msg)
-			}
+		for _, msg := range msgs {
+			t.sendQueue.Put(priority, msg)
 		}
 		return true
 	}

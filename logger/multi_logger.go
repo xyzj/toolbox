@@ -62,3 +62,10 @@ func (l *MultiLogger) SetLevel(ll LogLevel) {
 		o.SetLevel(ll)
 	}
 }
+
+func (l *MultiLogger) Close() error {
+	for _, o := range l.outs {
+		o.Close()
+	}
+	return nil
+}

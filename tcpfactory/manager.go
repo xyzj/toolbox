@@ -12,87 +12,42 @@ import (
 	"github.com/xyzj/deepcopy"
 	gopool "github.com/xyzj/go-pool"
 	"github.com/xyzj/toolbox"
-	"github.com/xyzj/toolbox/cache"
 	"github.com/xyzj/toolbox/loopfunc"
-	"github.com/xyzj/toolbox/mapfx"
 	"github.com/xyzj/toolbox/queue"
 )
 
 type TCPManager struct {
-	members     *mapfx.StructMap[uint64, tcpCore]
+	members     *members //*mapfx.StructMap[uint64, tcpCore]
 	opt         *opt
 	listener    *net.TCPListener
 	addr        *net.TCPAddr
 	recycle     *gopool.GoPool[*tcpCore]
-	targetCache *mapfx.BaseMap[uint64]
-	reportCache *cache.AnyCache[*reportItem]
+	reportCache *reportData
 	shutdown    atomic.Bool
 }
 
+// HealthReport generates a health report for all members.
 func (t *TCPManager) HealthReport() map[uint64]any {
-	// dis := make([]uint64, 0, t.members.Len())
 	a := make(map[uint64]any, t.members.Len())
-	t.reportCache.ForEach(func(key string, value *reportItem) bool {
-		if value.shutdown {
-			xc, ok := t.members.LoadForUpdate(value.id)
-			if ok {
-				xc.disconnect("client said shutdown")
-			}
+	removekey := make([]uint64, 0)
+	t.reportCache.ForEach(func(key uint64, value *reportItem) bool {
+		if time.Since(value.dtReport).Minutes() > 2 {
+			removekey = append(removekey, key)
 			return true
 		}
-		if time.Since(value.lastRead) > t.opt.readTimeout+time.Second*20 {
-			xc, ok := t.members.LoadForUpdate(value.id)
-			if ok {
-				xc.disconnect("socket anomaly")
-			}
-			return true
-		}
-		if !value.status && t.opt.registTimeout > 0 && time.Since(value.connTime) > t.opt.registTimeout {
-			xc, ok := t.members.LoadForUpdate(value.id)
-			if ok {
-				xc.disconnect("unregistered connection")
-			}
-			return true
-		}
+		// if time.Since(value.lastRead) > t.opt.readTimeout+time.Second*20 {
+		// 	t.members.Shutdown(value.id, "socket anomaly")
+		// 	return true
+		// }
+		// if !value.status && t.opt.registTimeout > 0 && time.Since(value.connTime) > t.opt.registTimeout {
+		// 	t.members.Shutdown(value.id, "unregistered connection")
+		// 	return true
+		// }
 		a[value.id] = value.msg
 		return true
 	})
-	// t.members.ForEachWithRLocker(func(key uint64, value *tcpCore) bool {
-	// 	if value.closed.Load() {
-	// 		dis = append(dis, key)
-	// 		return true
-	// 	}
-	// 	if time.Since(value.timeLastRead) > t.opt.readTimeout+time.Second*20 { // 读取超时，但却没有被关闭，通常为虚连接
-	// 		value.disconnect("socket anomaly")
-	// 		return true
-	// 	}
-
-	// 	if t.opt.registTimeout > 0 && time.Since(value.timeConnection) > t.opt.registTimeout { //  && value.sendQueue.Len() == 0
-	// 		if z, ok := value.healthReport(); !ok {
-	// 			value.disconnect("unregistered connection")
-	// 		} else {
-	// 			a[key] = z
-	// 		}
-	// 		return true
-	// 	}
-	// 	if z, ok := value.healthReport(); ok {
-	// 		a[key] = z
-	// 	}
-	// 	return true
-	// })
-	// t.members.DeleteMore(dis...)
+	t.reportCache.Delete(removekey...)
 	return a
-}
-
-func (t *TCPManager) writeToSocket(target string, front bool, msgs ...*SendMessage) bool {
-	sid, ok := t.targetCache.Load(target)
-	if ok {
-		v, ok := t.members.LoadForUpdate(sid)
-		if ok {
-			return v.writeTo(target, front, msgs...)
-		}
-	}
-	return false
 }
 
 // WriteTo sends the given messages to the specified target connections.
@@ -106,41 +61,14 @@ func (t *TCPManager) writeToSocket(target string, front bool, msgs ...*SendMessa
 // Return:
 // - None
 func (t *TCPManager) WriteTo(target string, msgs ...*SendMessage) {
-	if len(msgs) == 0 || strings.TrimSpace(target) == "" {
-		return
-	}
-	if t.writeToSocket(target, false, msgs...) {
-		return
-	}
-	t.members.ForEachWithRLocker(func(key uint64, value *tcpCore) bool {
-		if value.writeTo(target, false, msgs...) {
-			t.targetCache.Store(target, value.sockID)
-			return t.opt.multiTargets
-		}
-		return true
-	})
+	t.WriteWithPriority(queue.PriorityNormal, target, msgs...)
 }
 
-// WriteToFront sends one or more messages to the specified target connection(s) in the front-end.
-// If the target string is empty or no messages are provided, the function returns immediately.
-// The method iterates over all managed TCP connections and attempts to write the messages to the
-// connection matching the target identifier. If the write is successful and the multiTargets option
-// is enabled, the iteration continues to allow sending to multiple targets; otherwise, it stops after
-// the first successful write.
-func (t *TCPManager) WriteToFront(target string, msgs ...*SendMessage) {
+func (t *TCPManager) WriteWithPriority(priority queue.Priority, target string, msgs ...*SendMessage) {
 	if len(msgs) == 0 || strings.TrimSpace(target) == "" {
 		return
 	}
-	if t.writeToSocket(target, true, msgs...) {
-		return
-	}
-	t.members.ForEachWithRLocker(func(key uint64, value *tcpCore) bool {
-		if value.writeTo(target, true, msgs...) {
-			t.targetCache.Store(target, value.sockID)
-			return t.opt.multiTargets
-		}
-		return true
-	})
+	t.members.SendTo(priority, target, msgs...)
 }
 
 // WriteTo sends the given messages to the specified target connections.
@@ -157,28 +85,29 @@ func (t *TCPManager) WriteToMultiTargets(msg *SendMessage, targets ...string) {
 	if msg == nil || len(targets) == 0 {
 		return
 	}
-	nt := make([]string, 0, len(targets))
+	// nt := make([]string, 0, len(targets))
 	for _, a := range targets {
-		if t.writeToSocket(a, false, msg) {
-			continue
-		}
-		nt = append(nt, a)
+		t.members.SendTo(queue.PriorityNormal, a, msg)
+		// if t.members.SendTo(a, false, msg) {
+		// 	continue
+		// }
+		// nt = append(nt, a)
 	}
-	if len(nt) == 0 {
-		return
-	}
-	t.members.ForEachWithRLocker(func(key uint64, value *tcpCore) bool {
-		for _, a := range nt {
-			if strings.TrimSpace(a) == "" {
-				continue
-			}
-			if value.writeTo(a, false, msg) {
-				t.targetCache.Store(a, value.sockID)
-				return t.opt.multiTargets
-			}
-		}
-		return true
-	})
+	// if len(nt) == 0 {
+	// 	return
+	// }
+	// t.members.ForEachWithRLocker(func(key uint64, value *tcpCore) bool {
+	// 	for _, a := range nt {
+	// 		if strings.TrimSpace(a) == "" {
+	// 			continue
+	// 		}
+	// 		if value.writeTo(a, false, msg) {
+	// 			t.targetCache.Store(a, value.sockID)
+	// 			return t.opt.multiTargets
+	// 		}
+	// 	}
+	// 	return true
+	// })
 }
 
 // Listen starts listening for incoming TCP connections on the specified address.
@@ -228,8 +157,8 @@ func (t *TCPManager) Listen() error {
 					}
 					if !t.shutdown.Load() {
 						t.members.Delete(cli.sockID)
+						t.reportCache.Delete(cli.sockID)
 						t.recycle.Put(cli)
-						t.reportCache.Delete(fmt.Sprintf("%d", cli.sockID))
 					}
 				}()
 				cli.connect(conn, t.opt.helloMsg...) // conn
@@ -237,55 +166,70 @@ func (t *TCPManager) Listen() error {
 				go func() {
 					freport := func() {
 						x, ok, shutdown := cli.healthReport()
-						t.reportCache.Store(fmt.Sprintf("%d", cli.sockID), &reportItem{
-							id:        cli.sockID,
-							connTime:  cli.timeConnection,
-							lastRead:  cli.timeLastRead,
-							lastWrite: cli.timeLastWrite,
-							msg:       x,
-							status:    ok,
-							shutdown:  shutdown,
-						})
+						if shutdown {
+							cli.disconnect("client said shutdown")
+							return
+						}
+						if time.Since(cli.timeLastRead) > t.opt.readTimeout+time.Second*20 {
+							cli.disconnect("socket anomaly")
+							return
+						}
+						if !ok && t.opt.registTimeout > 0 && time.Since(cli.timeConnection) > t.opt.registTimeout {
+							cli.disconnect("unregistered connection")
+							return
+						}
+						if ok {
+							t.reportCache.Store(cli.sockID, &reportItem{
+								id:       cli.sockID,
+								msg:      x,
+								status:   ok,
+								dtReport: time.Now(),
+							})
+						}
 					}
-					time.Sleep(time.Second * 10)
-					freport()
-					t1 := time.NewTicker(time.Second * time.Duration(rand.Int31n(25)+25))
+					defer func() {
+						if err := recover(); err != nil {
+							cli.disconnect(fmt.Sprintf("send panic, %+v", err))
+						}
+					}()
+					t1 := time.NewTicker(time.Second * time.Duration(rand.Int31n(10)+20))
 					for !cli.closed.Load() {
 						select {
 						case <-cli.closeCtx.Done():
 							return
 						case <-t1.C:
 							freport()
+						default:
+							cli.send()
 						}
 					}
 				}()
-				go func() {
-					defer func() {
-						if err := recover(); err != nil {
-							cli.disconnect(fmt.Sprintf("send, %+v", err))
-						}
-					}()
-					// send
-					cli.send()
-				}()
+				// go func() {
+				// 	defer func() {
+				// 		if err := recover(); err != nil {
+				// 			cli.disconnect(fmt.Sprintf("send, %+v", err))
+				// 		}
+				// 	}()
+				// 	// send
+				// 	cli.send()
+				// }()
 				// recv
 				cli.recv()
 			}(conn)
 		}
 	}, "tcplistener", t.opt.logg.DefaultWriter())
 	t.opt.logg.System("Shutting down")
-	t.members.ForEachWithRLocker(func(key uint64, value *tcpCore) bool {
-		value.disconnect("server shutdown")
-		return true
-	})
+	t.members.ShutdownAll()
 	return nil
 }
 
+// Shutdown gracefully shuts down the TCPManager.
 func (t *TCPManager) Shutdown() {
 	t.shutdown.Store(true)
 	t.listener.Close()
 }
 
+// Len returns the number of active members.
 func (t *TCPManager) Len() int {
 	return t.members.Len()
 }
@@ -310,25 +254,29 @@ func NewTcpFactory(opts ...Options) (*TCPManager, error) {
 	if !ok {
 		return nil, fmt.Errorf("invalid bind address: %s", opt.bind)
 	}
-	rep := cache.NewAnyCache[*reportItem](time.Second * 50)
-	rep.SetCleanUp(time.Minute * 3)
+	// rep := cache.NewAnyCache[*reportItem](time.Second * 50)
+	// rep.SetCleanUp(time.Minute * 3)
 	sid := atomic.Uint64{}
-	return &TCPManager{
+	t := &TCPManager{
 		addr:        b,
 		opt:         &opt,
-		targetCache: mapfx.NewBaseMap[uint64](),
+		shutdown:    atomic.Bool{},
+		members:     newMembers(int(opt.predictedClients), opt.multiTargets), // mapfx.NewStructMap[uint64, tcpCore](),
+		reportCache: newReportData(int(opt.predictedClients)),
 		recycle: gopool.New(
 			func() *tcpCore {
 				t1 := time.NewTimer(time.Minute)
 				t1.Stop()
+				socketid := sid.Add(1)
 				return &tcpCore{
-					sockID:             sid.Add(1),
-					sendQueue:          queue.NewHighLowQueue[*SendMessage](opt.maxQueue),
+					sockID:             socketid,
+					sendQueue:          queue.NewPriorityQueue[*SendMessage](int(opt.maxQueue)),
 					closed:             atomic.Bool{},
-					readBuffer:         make([]byte, 8192),
+					readBuffer:         make([]byte, opt.readBufferSize),
 					readCache:          &bytes.Buffer{},
 					readTimeout:        opt.readTimeout,
 					writeTimeout:       opt.writeTimeout,
+					sendQueueTimeout:   opt.sendQueueTimeout,
 					writeIntervalTimer: t1,
 					tcpClient:          deepcopy.CopyAny(opt.client),
 					logg:               opt.logg,
@@ -357,8 +305,6 @@ func NewTcpFactory(opts ...Options) (*TCPManager, error) {
 		// 		}
 		// 	},
 		// },
-		shutdown:    atomic.Bool{},
-		members:     mapfx.NewStructMap[uint64, tcpCore](),
-		reportCache: rep,
-	}, nil
+	}
+	return t, nil
 }

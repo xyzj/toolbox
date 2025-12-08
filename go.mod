@@ -1,6 +1,6 @@
 module github.com/xyzj/toolbox
 
-go 1.24.0
+go 1.25.0
 
 require (
 	github.com/bytedance/sonic v1.14.1
@@ -12,6 +12,7 @@ require (
 	github.com/go-echarts/go-echarts/v2 v2.6.2
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/goccy/go-json v0.10.5
+	github.com/golang/snappy v1.0.0
 	github.com/google/uuid v1.6.0
 	github.com/klauspost/compress v1.18.0
 	github.com/microsoft/go-mssqldb v1.7.2

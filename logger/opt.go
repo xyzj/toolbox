@@ -1,65 +1,103 @@
 package logger
 
-import "github.com/xyzj/toolbox/pathtool"
+import (
+	"path/filepath"
+	"strings"
 
-// opt OptLog
-type opt struct {
-	// filename 日志文件名，不需要扩展名，会自动追加时间戳以及.log扩展名，为空时其他参数无效，仅输出到控制台
-	filename string
-	// filedir 日志存放目录
-	filedir string
-	// filesize 单个日志文件最大大小，AutoRoll==true时有效
-	filesize int64
-	// filedays 日志最大保留天数，AutoRoll==true时有效
-	filedays int
-	// autoroll 是否自动滚动日志文件，true-依据FileDays和FileSize自动切分日志文件，日志文件名会额外追加日期时间戳‘yymmdd’和序号
-	autoroll bool
-	// compressfile 是否压缩旧日志文件，AutoRoll==true时有效
-	compressfile bool
-	// DelayWrite 延迟写入，每秒检查写入缓存，并写入文件，非实时写入
-	// DelayWrite bool
-	// LogLevel 日志等级
-	// LogLevel LogLevel
+	"github.com/xyzj/toolbox/pathtool"
+)
+
+const (
+	fileTimeFormat  = "0102-1504"           // 日志文件命名格式
+	maxFileSize     = 1024 * 1024 * 1000    // 1000mb
+	ShortTimeFormat = "15:04:05.000 "       // ShortTimeFormat 日志事件戳格式
+	LongTimeFormat  = "Jan02 15:04:05.000 " // 2006-01-02 15:04:05.000 "
+)
+
+var lineEnd = []byte{10}
+
+type CompressMethod string
+
+const (
+	CompressNone   CompressMethod = "none"
+	CompressSnappy CompressMethod = "snappy"
+	CompressZstd   CompressMethod = "zstd"
+	CompressGzip   CompressMethod = "gzip"
+)
+
+type writerOpt struct {
+	compress     CompressMethod // compress 压缩方式， none-不压缩, snappy-snappy压缩, zstd-zstd压缩, gzip-gzip压缩
+	filename     string         // filename 日志文件名，不需要扩展名，会自动追加时间戳以及.log扩展名，为空时其他参数无效，仅输出到控制台
+	timeformat   string         // timeformat 日志时间戳格式
+	maxsize      int64          // maxsize 日志文件最大大小，超过后会自动切割
+	maxdays      int            // maxdays 日志文件最大保存天数
+	maxbackups   int            // maxbackups 最大备份数量
+	backupformat string         // backupformat 备份文件时间戳格式
+	dir          string         // dir 日志文件存放目录
+	file         string         // file 日志文件名，不包含路径
 }
 
-type Options func(opt *opt)
+type writerOpts func(opt *writerOpt)
 
-func WithFilename(name string) Options {
-	return func(o *opt) {
-		o.filename = name
+func WithMaxDays(days int) writerOpts {
+	return func(o *writerOpt) {
+		o.maxdays = days
 	}
 }
 
-func WithFileDir(name string) Options {
-	if name == "" || name == "." {
-		name = pathtool.GetExecDir()
-	}
-	return func(o *opt) {
-		o.filedir = name
+func WithCompressMethod(method CompressMethod) writerOpts {
+	return func(o *writerOpt) {
+		o.compress = method
 	}
 }
 
-func WithFileDays(n int) Options {
-	if n > 0 {
-		return func(o *opt) {
-			o.filedays = n
-			o.autoroll = true
+func WithLogTimeFormater(format string) writerOpts {
+	return func(o *writerOpt) {
+		o.timeformat = format
+	}
+}
+
+func WithFilename(name string) writerOpts {
+	return func(o *writerOpt) {
+		o.dir, o.file, _ = pathtool.EnsureDirAndSplit(name)
+		if o.file == "" {
+			o.filename = ""
+			return
 		}
-	}
-	return func(o *opt) {
-		o.filedays = n
-	}
-}
-
-func WithFileSize(n int64) Options {
-	return func(o *opt) {
-		o.filesize = max(n, maxFileSize)
-		o.autoroll = true
+		if !strings.HasSuffix(o.file, ".log") {
+			o.file += ".log"
+		}
+		o.filename = filepath.Join(o.dir, o.file)
 	}
 }
 
-func WithCompressFile(b bool) Options {
-	return func(o *opt) {
-		o.compressfile = b
+func WithMaxSize(size int64) writerOpts {
+	return func(o *writerOpt) {
+		o.maxsize = size
+	}
+}
+
+func WithMaxBackups(backups int) writerOpts {
+	return func(o *writerOpt) {
+		o.maxbackups = backups
+	}
+}
+
+func WithBackupFormat(format string) writerOpts {
+	return func(o *writerOpt) {
+		o.backupformat = format
+	}
+}
+
+func defaultWriterOpts() *writerOpt {
+	return &writerOpt{
+		compress:     CompressNone,
+		filename:     "",
+		timeformat:   LongTimeFormat,
+		maxsize:      maxFileSize,
+		maxdays:      0,
+		maxbackups:   10,
+		dir:          pathtool.GetExecDir(),
+		backupformat: fileTimeFormat,
 	}
 }

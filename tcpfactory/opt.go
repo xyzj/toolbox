@@ -7,37 +7,49 @@ import (
 )
 
 type opt struct {
-	logg          logger.Logger
-	client        Client
-	readTimeout   time.Duration
-	writeTimeout  time.Duration
-	registTimeout time.Duration
-	keepAlive     time.Duration
-	helloMsg      []*SendMessage
-	bind          string
-	maxQueue      int32
-	poolSize      int32
-	multiTargets  bool
+	logg             logger.Logger
+	client           Client
+	readTimeout      time.Duration
+	writeTimeout     time.Duration
+	sendQueueTimeout time.Duration
+	registTimeout    time.Duration
+	keepAlive        time.Duration
+	helloMsg         []*SendMessage
+	bind             string
+	readBufferSize   int32
+	maxQueue         int32
+	poolSize         int32
+	predictedClients int32
+	multiTargets     bool
 }
 type Options func(opt *opt)
 
 var defaultOpt = opt{
-	logg:          logger.NewConsoleLogger(),
-	client:        &EmptyClient{},
-	bind:          ":6880",
-	readTimeout:   time.Second * 100,
-	writeTimeout:  time.Second * 10,
-	registTimeout: 0,
-	keepAlive:     time.Second * 30,
-	helloMsg:      make([]*SendMessage, 0),
-	maxQueue:      10,
-	poolSize:      30,
-	multiTargets:  false,
+	logg:             logger.NewConsoleLogger(),
+	client:           &EmptyClient{},
+	bind:             ":6880",
+	readTimeout:      time.Second * 100,
+	writeTimeout:     time.Second * 10,
+	sendQueueTimeout: time.Second * 30,
+	predictedClients: 1000,
+	registTimeout:    0,
+	readBufferSize:   4096,
+	keepAlive:        time.Second * 30,
+	helloMsg:         make([]*SendMessage, 0),
+	maxQueue:         10,
+	poolSize:         30,
+	multiTargets:     false,
 }
 
 func WithBindAddr(s string) Options {
 	return func(o *opt) {
 		o.bind = s
+	}
+}
+
+func WithPredictedClients(n int32) Options {
+	return func(o *opt) {
+		o.predictedClients = n
 	}
 }
 
@@ -54,6 +66,11 @@ func WithBindAddr(s string) Options {
 func WithReadTimeout(t time.Duration) Options {
 	return func(o *opt) {
 		o.readTimeout = min(max(t, 1000000000), 6000000000000) // 1s～100m
+	}
+}
+func WithSendQueueTimeout(t time.Duration) Options {
+	return func(o *opt) {
+		o.sendQueueTimeout = min(max(t, 1000000000), 6000000000000) // 1s～100m
 	}
 }
 
@@ -148,7 +165,7 @@ func WithMaxSendQueue(l int32) Options {
 	}
 }
 
-// WithMatchMultiTargets is an option function for the TCPFactory that allows setting
+// WithMultiTargetsInOneMember is an option function for the TCPFactory that allows setting
 // whether the factory should match messages to multiple targets or not.
 //
 // The function accepts a single parameter:
@@ -162,9 +179,9 @@ func WithMaxSendQueue(l int32) Options {
 // Example usage:
 //
 //	factory := NewTCPFactory(
-//		WithMatchMultiTargets(true),
+//		WithMultiTargetsInOneMember(true),
 //	)
-func WithMatchMultiTargets(l bool) Options {
+func WithMultiTargetsInOneMember(l bool) Options {
 	return func(o *opt) {
 		o.multiTargets = l
 	}
@@ -214,6 +231,15 @@ func WithTcpClient(t Client) Options {
 func WithHelloMessages(t ...*SendMessage) Options {
 	return func(o *opt) {
 		o.helloMsg = append(o.helloMsg, t...)
+	}
+}
+
+// WithReadBufferSize returns an option that sets the read buffer size (in bytes).
+// The provided value t is applied, but will be clamped to a minimum of 1024 bytes
+// to ensure a reasonable buffer size for reads.
+func WithReadBufferSize(t int32) Options {
+	return func(o *opt) {
+		o.readBufferSize = max(1024, t)
 	}
 }
 

@@ -88,10 +88,9 @@ func LogToWriter(w io.Writer, skippath ...string) gin.HandlerFunc {
 // logdir: 日志存放目录。
 // filename：日志文件名。
 // maxdays：日志文件最大保存天数。
-func LoggerWithRolling(logdir, filename string, maxdays int, skippath ...string) gin.HandlerFunc {
-	lo := logger.NewWriter(logger.WithCompressFile(true),
-		logger.WithFileDays(maxdays),
-		logger.WithFileDir(logdir),
+func LoggerWithRolling(logdir, filename string, maxbackups int, skippath ...string) gin.HandlerFunc {
+	lo := logger.NewWriter(logger.WithCompressMethod(logger.CompressZstd),
+		logger.WithMaxBackups(maxbackups),
 		logger.WithFilename(filename))
 	return LogToWriter(lo, skippath...)
 }

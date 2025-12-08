@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"context"
 	"sync/atomic"
 )
 
@@ -165,6 +166,41 @@ func (q *HighLowQueue[VALUE]) Get() (VALUE, bool) {
 		q.lh.Add(-1)
 	case q.out, q.ok = <-q.low:
 		q.ll.Add(-1)
+	}
+	return q.out, q.ok
+}
+
+// GetWithContext returns the next value from the HighLowQueue along with a boolean
+// indicating whether the receive succeeded (true) or the channel was closed (false).
+// It first checks whether the queue has been closed and returns the zero value and
+// false immediately if so. If the internal high-priority counter indicates one or
+// more high-priority items (lh > 0), the function performs a non-blocking receive
+// from the high-priority channel, decrements the high counter, and returns the
+// result. Otherwise the call blocks, selecting between a receive from the high-
+// priority channel, a receive from the low-priority channel, and ctx.Done().
+// A receive from the high-priority channel decrements the high counter; a receive
+// from the low-priority channel decrements the low counter. If ctx is canceled or
+// its deadline expires before a value is received, the method returns the zero
+// value and false. Note that a received value paired with ok == false indicates
+// the channel was closed. The method relies on atomic checks for the closed flag
+// and counters and is intended to be used safely by concurrent callers.
+func (q *HighLowQueue[VALUE]) GetWithContext(ctx context.Context) (VALUE, bool) {
+	if q.closed.Load() {
+		return *new(VALUE), false
+	}
+	if q.lh.Load() > 0 {
+		q.out, q.ok = <-q.high
+		q.lh.Add(-1)
+		return q.out, q.ok
+	}
+
+	select {
+	case q.out, q.ok = <-q.high:
+		q.lh.Add(-1)
+	case q.out, q.ok = <-q.low:
+		q.ll.Add(-1)
+	case <-ctx.Done():
+		return *new(VALUE), false
 	}
 	return q.out, q.ok
 }

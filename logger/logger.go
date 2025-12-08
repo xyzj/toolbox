@@ -27,6 +27,7 @@ type Logger interface {
 	System(msg string)
 	DefaultWriter() io.Writer
 	SetLevel(l LogLevel)
+	Close() error
 }
 
 // NilLogger 空日志
@@ -50,6 +51,7 @@ func (l *NilLogger) System(msg string) {}
 // DefaultWriter 返回日志Writer
 func (l *NilLogger) DefaultWriter() io.Writer { return io.Discard }
 func (l *NilLogger) SetLevel(LogLevel)        {}
+func (l *NilLogger) Close() error             { return nil }
 
 // StdLogger mx log
 type StdLogger struct {
@@ -101,6 +103,13 @@ func (l *StdLogger) SetLevel(ll LogLevel) {
 	l.logLevel = ll
 }
 
+func (l *StdLogger) Close() error {
+	if closer, ok := l.out.(io.Closer); ok {
+		return closer.Close()
+	}
+	return nil
+}
+
 // NewLogger init logger
 //
 // d: 日志保存路径
@@ -112,19 +121,11 @@ func (l *StdLogger) SetLevel(ll LogLevel) {
 // logDays 日志文件保留天数
 //
 // delayWrite 是否延迟写入，在日志密集时，可减少磁盘io，但可能导致日志丢失
-func NewLogger(l LogLevel, opts ...Options) Logger {
+func NewLogger(l LogLevel, opts ...writerOpts) Logger {
 	return &StdLogger{
 		out:      NewWriter(opts...),
 		logLevel: l,
 	}
-	// return &MultiLogger{
-	// 	outs: []*StdLogger{
-	// 		{
-	// 			logLevel: opt.LogLevel,
-	// 			out:      NewWriter(opt),
-	// 		},
-	// 	},
-	// }
 }
 
 // NewConsoleLogger 返回一个纯控制台日志输出器
@@ -133,14 +134,6 @@ func NewConsoleLogger() Logger {
 		out:      NewConsoleWriter(),
 		logLevel: LogDebug,
 	}
-	// return &MultiLogger{
-	// 	outs: []*StdLogger{
-	// 		{
-	// 			logLevel: LogDebug,
-	// 			out:      NewConsoleWriter(),
-	// 		},
-	// 	},
-	// }
 }
 
 func NewConsoleLoggerWithLevel(l LogLevel) Logger {
@@ -148,14 +141,6 @@ func NewConsoleLoggerWithLevel(l LogLevel) Logger {
 		out:      NewConsoleWriter(),
 		logLevel: l,
 	}
-	// return &MultiLogger{
-	// 	outs: []*StdLogger{
-	// 		{
-	// 			logLevel: LogDebug,
-	// 			out:      NewConsoleWriter(),
-	// 		},
-	// 	},
-	// }
 }
 
 func NewNilLogger() Logger {

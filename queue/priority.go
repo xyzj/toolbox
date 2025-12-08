@@ -1,191 +1,219 @@
 package queue
 
 import (
-	"fmt"
-	"sort"
+	"container/heap"
+	"context"
+	"errors"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
-type queueItem[VALUE any] struct {
-	priority string
-	data     VALUE
+type Priority byte
+
+const (
+	PriorityLowest  Priority = 1
+	PriorityLow     Priority = 3
+	PriorityNormal  Priority = 5
+	PriorityHigh    Priority = 7
+	PriorityHighest Priority = 9
+)
+
+// --- 1. 消息结构定义 ---
+
+// messageItem 是队列中存储的元素
+type messageItem[T any] struct {
+	Priority  Priority  // 优先级：数字越大，优先级越高 (例如，9 > 1)
+	CreatedAt time.Time // 消息插入时间，用于同优先级下的 FIFO 排序
+	Payload   T         // 实际消息内容
 }
 
-// PriorityQueue 一个可以设置内容优先级的队列，可设置在同等优先级下的内容先入先出或后入先出，队列为空时不阻塞
-type PriorityQueue[VALUE any] struct {
-	locker sync.RWMutex
-	data   []*queueItem[VALUE]
-	item   *queueItem[VALUE]
-	l      atomic.Int32
-	closed atomic.Bool
-	max    int32
-	fifo   bool
-}
+// --- 2. 核心：优先级堆实现 (实现 heap.Interface 接口) ---
 
-// NewPriorityQueue creates a new instance of PriorityQueue.
-// The PriorityQueue is a generic type that supports any type of value.
-//
-// fifo: A boolean flag indicating whether the queue should follow a FIFO (First In First Out) order.
-//
-//	If true, items with lower priority values will be dequeued first.
-//	If false, items with higher priority values will be dequeued first.
-//
-// Returns a pointer to a new PriorityQueue instance.
-func NewPriorityQueue[VALUE any](maxQueueSize int32, fifo bool) *PriorityQueue[VALUE] {
-	return &PriorityQueue[VALUE]{
-		locker: sync.RWMutex{},
-		data:   make([]*queueItem[VALUE], 0, maxQueueSize),
-		max:    maxQueueSize,
-		fifo:   fifo,
-		l:      atomic.Int32{},
-		closed: atomic.Bool{},
+// priorityHeap 是一个基于 Message 指针的最小堆
+// 注意：Go 的 heap 是最小堆，所以我们需要反转优先级，让高优先级 (大数字) 靠前 (小值)
+type priorityHeap[T any] []*messageItem[T]
+
+// 堆接口要求的 Len()
+func (h priorityHeap[T]) Len() int { return len(h) }
+
+// 堆接口要求的 Less()：定义排序规则（优先级越高，时间越早，越排在前面）
+func (h priorityHeap[T]) Less(i, j int) bool {
+	// 规则 1: 优先级高的排在前面 (Priority 大的在前面)
+	if h[i].Priority != h[j].Priority {
+		return h[i].Priority > h[j].Priority // 核心：反转 Less()，实现最大堆行为
 	}
+	// 规则 2: 优先级相同时，创建时间早的排在前面 (FIFO)
+	return h[i].CreatedAt.Before(h[j].CreatedAt)
 }
 
-// Open initializes the high-low queue by creating channels for high and low priority items,
-// setting the closed flag to false, and initializing the counters for high and low priority items.
-// It does not return any value.
-func (q *PriorityQueue[VALUE]) Open() {
-	q.closed.Store(false)
-	q.l.Store(0)
-	q.data = make([]*queueItem[VALUE], 0, q.max)
+// 堆接口要求的 Swap()
+func (h priorityHeap[T]) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
+
+// 堆接口要求的 Push()
+func (h *priorityHeap[T]) Push(x any) {
+	item := x.(*messageItem[T])
+	*h = append(*h, item)
 }
 
-// Close closes the high-low queue by setting the closed flag to true and closing the channels for high and low priority items.
-// After calling Close, no more items can be added to the queue and Get will return immediately with an error.
-//
-// Close does not wait for any pending items to be processed. It is safe to call Close multiple times.
-//
-// Close does not return any value.
-func (q *PriorityQueue[VALUE]) Close() {
-	q.closed.Store(true)
-	q.l.Store(0)
+// 堆接口要求的 Pop()
+func (h *priorityHeap[T]) Pop() any {
+	old := *h
+	n := len(old)
+	item := old[n-1]
+	old[n-1] = nil // 避免内存泄漏
+	*h = old[0 : n-1]
+	return item
 }
 
-// Closed checks if the high-low queue is closed.
-//
-// The Closed function returns true if the queue is closed (i.e., no more items can be added to the queue),
-// and false otherwise. It does not block and returns the current state of the queue.
-//
-// The Closed function does not return any error.
-//
-// Return:
-//   - bool: A boolean indicating whether the queue is closed.
-//   - true: The queue is closed.
-//   - false: The queue is open.
-func (q *PriorityQueue[VALUE]) Closed() bool {
-	return q.closed.Load()
+// --- 3. 阻塞队列包装器 ---
+
+// PriorityQueue 包装器，包含堆、锁、条件变量和最大长度
+type PriorityQueue[T any] struct {
+	heap      *priorityHeap[T]
+	mutex     sync.Mutex
+	cond      *sync.Cond // 用于阻塞/唤醒 Get 操作
+	maxLength int
+	closed    atomic.Bool // 追踪队列是否已关闭
+	zero      T
 }
 
-// Len returns the number of items currently in the PriorityQueue.
-//
-// The Len function is a method of the PriorityQueue type. It returns the length of the data slice,
-// which represents the number of items currently in the queue.
-//
-// Returns:
-// - An integer representing the number of items in the PriorityQueue.
-func (q *PriorityQueue[VALUE]) Len() int32 {
-	return q.l.Load()
+// NewPriorityQueue 构造函数
+func NewPriorityQueue[T any](maxLength int) *PriorityQueue[T] {
+	h := &priorityHeap[T]{}
+	pq := &PriorityQueue[T]{
+		heap:      h,
+		maxLength: maxLength,
+	}
+	pq.cond = sync.NewCond(&pq.mutex) // 条件变量必须基于 Mutex
+	heap.Init(h)
+	return pq
 }
 
-// Empty checks if the high-low queue is empty.
-// It returns true if the queue is empty (i.e., there are no items in the queue),
-// and false otherwise.
-//
-// Empty does not block and returns the current emptiness of the queue.
-//
-// Empty does not return any error.
-func (q *PriorityQueue[VALUE]) Empty() bool {
-	return q.l.Load() == 0
-}
-
-// Put adds an item to the PriorityQueue with the default priority (255).
-// If the PriorityQueue is already full, it returns an error.
-//
-// Parameters:
-// - data: The value to be added to the PriorityQueue.
-//
-// Returns:
-// - error: An error indicating whether the item was successfully added (nil) or if the queue is full (ErrFull).
-func (q *PriorityQueue[VALUE]) Put(data VALUE) error {
-	return q.PutWithPriority(data, 255)
-}
-
-// PutFront adds an item to the PriorityQueue with the highest priority (0).
-// If the PriorityQueue is already full, it returns an error.
-//
-// Parameters:
-// - data: The value to be added to the PriorityQueue. The type of data must be compatible with the generic type VALUE.
-//
-// Returns:
-// - error: An error indicating whether the item was successfully added (nil) or if the queue is full (ErrFull).
-//
-// PutFront is a method of the PriorityQueue type. It calls the PutWithPriority method with a priority of 0,
-// effectively adding the item to the front of the queue.
-func (q *PriorityQueue[VALUE]) PutFront(data VALUE) error {
-	return q.PutWithPriority(data, 0)
-}
-
-// PutWithPriority adds an item to the PriorityQueue with the specified priority.
-//
-// The Put function locks the PriorityQueue to ensure thread safety while adding the item.
-// It creates a new queueItem with the provided data and priority, and appends it to the data slice.
-// After adding the item, it calls the sort function to maintain the correct order of items in the queue.
-//
-// Parameters:
-// - data: The value to be added to the PriorityQueue.
-// - priority: The priority of the item. Lower values indicate higher priority.
-func (q *PriorityQueue[VALUE]) PutWithPriority(data VALUE, priority byte) error {
-	if q.closed.Load() {
+// Put 将消息放入队列。如果队列已满，则返回错误。
+func (pq *PriorityQueue[T]) Put(priority Priority, payload T) error {
+	pq.mutex.Lock()
+	defer pq.mutex.Unlock()
+	if pq.closed.Load() { // 检查是否已关闭
 		return ErrClosed
 	}
-	if q.l.Load() >= q.max {
+	if pq.heap.Len() >= pq.maxLength {
 		return ErrFull
 	}
-	q.locker.Lock()
-	defer q.locker.Unlock()
-	q.l.Add(1)
-	q.data = append(q.data, &queueItem[VALUE]{
-		priority: fmt.Sprintf("%03d_%d", priority, time.Now().UnixNano()),
-		data:     data,
-	})
-	q.sort()
+	msg := &messageItem[T]{
+		Priority:  priority,
+		CreatedAt: time.Now(),
+		Payload:   payload,
+	}
+	heap.Push(pq.heap, msg)
+
+	// 唤醒一个可能阻塞在 Get 上的 Goroutine
+	pq.cond.Signal()
 	return nil
 }
 
-// Get retrieves and removes the highest priority item from the PriorityQueue.
-// If the PriorityQueue is empty, it returns a zero value of the VALUE type and false.
-//
-// The function locks the PriorityQueue to ensure thread safety while retrieving the item.
-// It checks if the queue is empty and returns false if it is.
-// Otherwise, it assigns the first item in the queue to the item variable, removes it from the data slice,
-// and returns the data value and true.
-//
-// Returns:
-//
-//	data VALUE - The data value of the highest priority item.
-//	bool - A boolean indicating whether an item was retrieved (true) or the queue was empty (false).
-func (q *PriorityQueue[VALUE]) Get() (VALUE, bool) {
-	if q.l.Load() == 0 || q.closed.Load() {
-		return *new(VALUE), false
-	}
-	q.locker.Lock()
-	defer q.locker.Unlock()
-	q.item = q.data[0]
-	q.data = q.data[1:]
-	q.l.Add(-1)
-	return q.item.data, true
+// Get 从队列中取出优先级最高的消息。如果队列为空，则阻塞。
+func (pq *PriorityQueue[T]) Get() (T, error) {
+	return pq.GetWithContext(context.TODO())
 }
 
-func (q *PriorityQueue[VALUE]) sort() {
-	q.locker.Lock()
-	defer q.locker.Unlock()
-	sort.Slice(q.data, func(i, j int) bool {
-		if q.fifo {
-			return q.data[i].priority < q.data[j].priority
-		}
-		return q.data[i].priority > q.data[j].priority
+// - *Message：如果成功取出消息。
+// - nil：如果 Context 被取消（超时或外部 Cancel）。
+func (pq *PriorityQueue[T]) GetWithContext(ctx context.Context) (T, error) {
+	// var zero T
+
+	pq.mutex.Lock()
+	defer pq.mutex.Unlock()
+
+	if pq.closed.Load() {
+		return pq.zero, ErrClosed
+	}
+
+	// ctx 取消时唤醒 cond.Wait
+	cancelWake := context.AfterFunc(ctx, func() {
+		pq.mutex.Lock()
+		pq.cond.Broadcast()
+		pq.mutex.Unlock()
 	})
+	defer cancelWake()
+
+	for {
+		// 有元素直接取
+		if pq.heap.Len() > 0 {
+			return heap.Pop(pq.heap).(*messageItem[T]).Payload, nil
+		}
+		// 队列已关闭
+		if pq.closed.Load() {
+			return pq.zero, ErrClosed
+		}
+		// 上下文已取消/超时
+		if err := ctx.Err(); err != nil {
+			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+				return pq.zero, ErrTimeout
+			}
+			return pq.zero, err
+		}
+		// 等待被 Put 或 Cancel 唤醒
+		pq.cond.Wait()
+	}
+}
+
+// Length 返回当前队列中的元素数量
+func (pq *PriorityQueue[T]) Len() int {
+	pq.mutex.Lock()
+	defer pq.mutex.Unlock()
+	return pq.heap.Len()
+}
+
+// Close 清理队列内容，并唤醒所有阻塞的 GetContext 请求。
+func (pq *PriorityQueue[T]) Close() {
+	// 确保只关闭一次
+	if pq.closed.Load() {
+		return
+	}
+	pq.mutex.Lock()
+	defer pq.mutex.Unlock()
+
+	pq.closed.Store(true)
+	// 清理队列内容（可选，但通常在关闭时执行）
+	pq.heap = &priorityHeap[T]{}
+	heap.Init(pq.heap)
+	// 唤醒所有等待在 cond.Wait() 上的 Goroutines，它们将在 GetContext 中检查 closed 状态后返回 nil
+	pq.cond.Broadcast()
+}
+
+// IsClosed reports whether the priority queue has been closed.
+// It returns true if the internal closed flag is set, false otherwise.
+// The check is performed atomically and is safe for concurrent use.
+func (pq *PriorityQueue[T]) IsClosed() bool {
+	return pq.closed.Load()
+}
+
+// Open marks the priority queue as open (not closed).
+// If the queue is already open, Open returns immediately and does nothing.
+// The implementation performs a fast, lock-free check of the closed flag and
+// only acquires the mutex when the queue appears closed, then sets the flag to false.
+// This method is safe for concurrent use and ensures the queue's closed state is cleared.
+func (pq *PriorityQueue[T]) Open() {
+	if !pq.closed.Load() {
+		return
+	}
+	pq.mutex.Lock()
+	defer pq.mutex.Unlock()
+	pq.closed.Store(false)
+}
+
+// Reset reinitializes the priority queue to an empty state.
+// It returns ErrClosed if the queue is not marked as closed.
+// Reset acquires the queue's mutex, replaces the internal heap with a fresh empty heap,
+// and calls heap.Init on the new heap. On success it returns nil.
+func (pq *PriorityQueue[T]) Reset() error {
+	if !pq.closed.Load() {
+		return ErrClosed
+	}
+	pq.mutex.Lock()
+	defer pq.mutex.Unlock()
+	pq.heap = &priorityHeap[T]{}
+	heap.Init(pq.heap)
+	return nil
 }

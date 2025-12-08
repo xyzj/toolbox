@@ -70,6 +70,26 @@ func (m *ChatManager) Chat(id, message string, f func([]byte) error, opts ...htt
 	return nil
 }
 
+func (m *ChatManager) ChatRaw(id, message string, f func([]byte) error, opts ...httpclient.ReqOptions) error {
+	chat, ok := m.chats.Load(id)
+	if !ok {
+		return errors.New("chat not found")
+	}
+	err := chat.ChatRaw(message, f)
+	if err != nil {
+		m.opt.logg.Error("Request chat error: " + err.Error())
+		return errors.New("Request chat error: " + err.Error())
+	}
+	m.chats.Store(chat.ID(), chat)
+	// save the chat
+	err = m.data.Store(chat.Print())
+	if err != nil {
+		m.opt.logg.Error("Update storage error: " + err.Error())
+		return errors.New("Update storage error: " + err.Error())
+	}
+	return nil
+}
+
 func (m *ChatManager) Stop(id string) error {
 	chat, ok := m.chats.Load(id)
 	if !ok {

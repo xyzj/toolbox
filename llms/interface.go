@@ -5,6 +5,7 @@ import "time"
 type Chat interface {
 	ID() string
 	Chat(string, func([]byte) error) error
+	ChatRaw(string, func([]byte) error) error
 	Stop()
 	Print() *ChatData
 	Restore(*ChatData)

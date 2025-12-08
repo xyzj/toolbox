@@ -125,6 +125,51 @@ func (c *Chat) Chat(message string, f func([]byte) error) error {
 	}, httpclient.WithTimeout(c.opt.timeout))
 }
 
+func (c *Chat) ChatRaw(message string, f func([]byte) error) error {
+	c.stop.Store(false)
+	c.locker.Lock()
+	defer c.locker.Unlock()
+	// 生成用户问题，加入历史
+	c.history.Store(&llms.Message{
+		Role:    "user",
+		Content: message,
+	})
+
+	// 组装聊天数据
+	data := &llms.ChatRequest{
+		Messages: c.history.Slice(),
+		Model:    c.opt.model,
+		Stream:   true, // 流式响应，设置为 false 获取非流式响应
+	}
+	req, _ := http.NewRequest("POST", c.opt.serverAddr, bytes.NewReader(data.Marshal()))
+	c.buf.Reset()
+	var err error
+	r := &ChatResponse{}
+	return c.client.DoStreamRequest(req, nil, func(b []byte) error {
+		if c.stop.Load() {
+			return errors.New("stop reading chat response")
+		}
+		err = json.Unmarshal(b, r)
+		if err != nil {
+			return errors.New("Ollama data Unmarshal error:" + err.Error())
+		}
+		if r.Message.Role != "assistant" {
+			return nil
+		}
+		if !r.Done {
+			c.buf.WriteString(r.Message.Content)
+			if f != nil {
+				return f(b)
+			}
+			return nil
+		}
+		c.history.Store(&llms.Message{
+			Role:    "assistant",
+			Content: c.buf.String(),
+		})
+		return nil
+	}, httpclient.WithTimeout(c.opt.timeout))
+}
 func (c *Chat) Stop() {
 	c.stop.Store(true)
 }

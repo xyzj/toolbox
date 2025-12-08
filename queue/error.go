@@ -11,4 +11,10 @@ var (
 
 	// ErrFull is returned when trying to add an item to a full queue.
 	ErrFull = errors.New("queue is full")
+
+	// ErrTimeout indicates that an operation did not complete within the allowed time period.
+	// It is returned when a queue operation or related IO exceeds its deadline or configured timeout.
+	// Callers can compare against ErrTimeout to detect timeout conditions and implement retries or cancellation.
+	ErrTimeout  = errors.New("operation timed out")
+	ErrAbnormal = errors.New("operation ended abnormally")
 )

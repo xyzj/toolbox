@@ -26,27 +26,17 @@ func ShutMeDown() *SendMessage {
 	return shutmedown
 }
 
-type reportItem struct {
-	id        uint64
-	connTime  time.Time
-	lastRead  time.Time
-	lastWrite time.Time
-	msg       any
-	status    bool
-	shutdown  bool
-}
-
 // Client defines the interface for handling TCP connection lifecycle and message processing.
 // It provides methods for connection events, data handling, logging, and client status reporting.
 type Client interface {
 	// MatchTarget is used to match if the target matches the client
 	MatchTarget(target string, prefix bool) bool
 	// Report is used to report client status, return status data and if the client is registered, and if the client is shutting down
-	Report() (any, bool, bool)
+	Report() (data any, legal bool, shutdown bool)
 	// OnConnect is called when the connection is established
 	OnConnect(conn *net.TCPConn)
 	// OnDisconnect is called when the connection is closed
-	OnDisconnect(reson string)
+	OnDisconnect(reason string)
 	// OnRecive is called when received data, return unfinished data, message need send to client
 	OnRecive(data []byte) ([]byte, []*SendMessage)
 	// OnSend is called when data is about to be sent, allowing the client to format or modify the outgoing data.

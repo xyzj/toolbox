@@ -151,6 +151,66 @@ func (c *Chat) Chat(message string, f func([]byte) error) error {
 	}, httpclient.WithTimeout(c.opt.timeout))
 }
 
+func (c *Chat) ChatRaw(message string, f func([]byte) error) error {
+	c.stop.Store(false)
+	c.locker.Lock()
+	defer c.locker.Unlock()
+	// 生成用户问题，加入历史
+	c.history.Store(&llms.Message{
+		Role:    "user",
+		Content: message,
+	})
+
+	// 组装聊天数据
+	data := &llms.ChatRequest{
+		Messages: c.history.Slice(),
+		Model:    c.opt.model,
+		Stream:   true, // 流式响应，设置为 false 获取非流式响应
+	}
+	req, _ := http.NewRequest("POST", c.opt.serverAddr, bytes.NewReader(data.Marshal()))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.opt.apiKey)
+	c.buf.Reset()
+	var err error
+	r := &ChatResponse{}
+	return c.client.DoStreamRequest(req, nil, func(b []byte) error {
+		if c.stop.Load() {
+			return errors.New("stop reading chat response")
+		}
+		b = bytes.TrimSpace(bytes.TrimPrefix(b, []byte("data: ")))
+		if len(b) < 2 {
+			return nil
+		}
+		if json.String(b) == ssdDone { // 结束
+			if c.buf.Len() > 0 {
+				c.history.Store(&llms.Message{
+					Role:    "assistant",
+					Content: c.buf.String(),
+				})
+			}
+			return nil
+		}
+		err = json.Unmarshal(b, r)
+		if err != nil {
+			return errors.New("response data Unmarshal error:" + err.Error())
+		}
+		for _, chat := range r.Choices {
+			if chat.Delta.Role != "assistant" {
+				continue
+			}
+			if chat.FinishReason == "" {
+				c.buf.WriteString(chat.Delta.Content)
+				if f != nil {
+					if err = f(b); err != nil {
+						break
+					}
+				}
+			}
+		}
+		return nil
+	}, httpclient.WithTimeout(c.opt.timeout))
+}
+
 func (c *Chat) Stop() {
 	c.stop.Store(true)
 }
