@@ -35,14 +35,6 @@ func (t *TCPManager) HealthReport() map[uint64]any {
 			removekey = append(removekey, key)
 			return true
 		}
-		// if time.Since(value.lastRead) > t.opt.readTimeout+time.Second*20 {
-		// 	t.members.Shutdown(value.id, "socket anomaly")
-		// 	return true
-		// }
-		// if !value.status && t.opt.registTimeout > 0 && time.Since(value.connTime) > t.opt.registTimeout {
-		// 	t.members.Shutdown(value.id, "unregistered connection")
-		// 	return true
-		// }
 		a[value.id] = value.msg
 		return true
 	})
@@ -85,29 +77,9 @@ func (t *TCPManager) WriteToMultiTargets(msg *SendMessage, targets ...string) {
 	if msg == nil || len(targets) == 0 {
 		return
 	}
-	// nt := make([]string, 0, len(targets))
 	for _, a := range targets {
 		t.members.SendTo(queue.PriorityNormal, a, msg)
-		// if t.members.SendTo(a, false, msg) {
-		// 	continue
-		// }
-		// nt = append(nt, a)
 	}
-	// if len(nt) == 0 {
-	// 	return
-	// }
-	// t.members.ForEachWithRLocker(func(key uint64, value *tcpCore) bool {
-	// 	for _, a := range nt {
-	// 		if strings.TrimSpace(a) == "" {
-	// 			continue
-	// 		}
-	// 		if value.writeTo(a, false, msg) {
-	// 			t.targetCache.Store(a, value.sockID)
-	// 			return t.opt.multiTargets
-	// 		}
-	// 	}
-	// 	return true
-	// })
 }
 
 // Listen starts listening for incoming TCP connections on the specified address.
@@ -204,15 +176,6 @@ func (t *TCPManager) Listen() error {
 						}
 					}
 				}()
-				// go func() {
-				// 	defer func() {
-				// 		if err := recover(); err != nil {
-				// 			cli.disconnect(fmt.Sprintf("send, %+v", err))
-				// 		}
-				// 	}()
-				// 	// send
-				// 	cli.send()
-				// }()
 				// recv
 				cli.recv()
 			}(conn)
@@ -276,7 +239,7 @@ func NewTcpFactory(opts ...Options) (*TCPManager, error) {
 					readCache:          &bytes.Buffer{},
 					readTimeout:        opt.readTimeout,
 					writeTimeout:       opt.writeTimeout,
-					sendQueueTimeout:   opt.sendQueueTimeout,
+					sendQueueTimeout:   time.Second * 30,
 					writeIntervalTimer: t1,
 					tcpClient:          deepcopy.CopyAny(opt.client),
 					logg:               opt.logg,
@@ -284,27 +247,6 @@ func NewTcpFactory(opts ...Options) (*TCPManager, error) {
 			},
 			gopool.WithMaxIdleSize(uint32(opt.poolSize)),
 		),
-		// recycle: sync.Pool{
-		// 	New: func() any {
-		// 		ctx, cancel := context.WithCancel(context.Background())
-		// 		t1 := time.NewTimer(time.Minute)
-		// 		t1.Stop()
-		// 		return &tcpCore{
-		// 			sockID:             sid.Add(1),
-		// 			sendQueue:          queue.NewHighLowQueue[*SendMessage](opt.maxQueue),
-		// 			closed:             atomic.Bool{},
-		// 			readBuffer:         make([]byte, 8192),
-		// 			readCache:          &bytes.Buffer{},
-		// 			readTimeout:        opt.readTimeout,
-		// 			writeTimeout:       opt.writeTimeout,
-		// 			writeIntervalTimer: t1,
-		// 			tcpClient:          deepcopy.CopyAny(opt.client),
-		// 			closeCtx:           ctx,
-		// 			closeFunc:          cancel,
-		// 			logg:               opt.logg,
-		// 		}
-		// 	},
-		// },
 	}
 	return t, nil
 }

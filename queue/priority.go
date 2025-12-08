@@ -71,7 +71,7 @@ func (h *priorityHeap[T]) Pop() any {
 // PriorityQueue 包装器，包含堆、锁、条件变量和最大长度
 type PriorityQueue[T any] struct {
 	heap      *priorityHeap[T]
-	mutex     sync.Mutex
+	mutex     sync.RWMutex
 	cond      *sync.Cond // 用于阻塞/唤醒 Get 操作
 	maxLength int
 	closed    atomic.Bool // 追踪队列是否已关闭
@@ -160,19 +160,19 @@ func (pq *PriorityQueue[T]) GetWithContext(ctx context.Context) (T, error) {
 
 // Length 返回当前队列中的元素数量
 func (pq *PriorityQueue[T]) Len() int {
-	pq.mutex.Lock()
-	defer pq.mutex.Unlock()
+	pq.mutex.RLock()
+	defer pq.mutex.RUnlock()
 	return pq.heap.Len()
 }
 
 // Close 清理队列内容，并唤醒所有阻塞的 GetContext 请求。
 func (pq *PriorityQueue[T]) Close() {
+	pq.mutex.Lock()
+	defer pq.mutex.Unlock()
 	// 确保只关闭一次
 	if pq.closed.Load() {
 		return
 	}
-	pq.mutex.Lock()
-	defer pq.mutex.Unlock()
 
 	pq.closed.Store(true)
 	// 清理队列内容（可选，但通常在关闭时执行）

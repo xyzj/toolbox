@@ -11,7 +11,6 @@ type opt struct {
 	client           Client
 	readTimeout      time.Duration
 	writeTimeout     time.Duration
-	sendQueueTimeout time.Duration
 	registTimeout    time.Duration
 	keepAlive        time.Duration
 	helloMsg         []*SendMessage
@@ -30,7 +29,6 @@ var defaultOpt = opt{
 	bind:             ":6880",
 	readTimeout:      time.Second * 100,
 	writeTimeout:     time.Second * 10,
-	sendQueueTimeout: time.Second * 30,
 	predictedClients: 1000,
 	registTimeout:    0,
 	readBufferSize:   4096,
@@ -66,11 +64,6 @@ func WithPredictedClients(n int32) Options {
 func WithReadTimeout(t time.Duration) Options {
 	return func(o *opt) {
 		o.readTimeout = min(max(t, 1000000000), 6000000000000) // 1s～100m
-	}
-}
-func WithSendQueueTimeout(t time.Duration) Options {
-	return func(o *opt) {
-		o.sendQueueTimeout = min(max(t, 1000000000), 6000000000000) // 1s～100m
 	}
 }
 
