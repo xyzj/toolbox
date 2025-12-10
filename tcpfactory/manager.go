@@ -217,8 +217,6 @@ func NewTcpFactory(opts ...Options) (*TCPManager, error) {
 	if !ok {
 		return nil, fmt.Errorf("invalid bind address: %s", opt.bind)
 	}
-	// rep := cache.NewAnyCache[*reportItem](time.Second * 50)
-	// rep.SetCleanUp(time.Minute * 3)
 	sid := atomic.Uint64{}
 	t := &TCPManager{
 		addr:        b,

@@ -16,6 +16,10 @@ import (
 	"github.com/xyzj/toolbox/queue"
 )
 
+const (
+	logformater = "[%s] %s"
+)
+
 type tcpCore struct {
 	conn               *net.TCPConn                       // 连接实例
 	sendQueue          *queue.PriorityQueue[*SendMessage] // 发送队列
@@ -39,7 +43,7 @@ type tcpCore struct {
 }
 
 func (t *tcpCore) formatLog(s string) string {
-	return fmt.Sprintf("[%s] %s", t.remoteAddr, s)
+	return fmt.Sprintf(logformater, t.remoteAddr, s)
 }
 
 func (t *tcpCore) connect(conn *net.TCPConn, msgs ...*SendMessage) {

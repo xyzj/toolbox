@@ -9,13 +9,11 @@ import (
 type LogLevel byte
 
 const (
-	LogDebug            LogLevel = 10
-	LogInfo             LogLevel = 20
-	LogWarning          LogLevel = 30
-	LogError            LogLevel = 40
-	LogSystem           LogLevel = 90
-	logformater                  = "%s %s"
-	logformaterWithName          = "%s [%s] %s"
+	LogDebug   LogLevel = 10
+	LogInfo    LogLevel = 20
+	LogWarning LogLevel = 30
+	LogError   LogLevel = 40
+	LogSystem  LogLevel = 90
 )
 
 // Logger 日志接口
