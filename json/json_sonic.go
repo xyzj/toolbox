@@ -14,9 +14,8 @@ var (
 		NoValidateJSONSkip:      true,
 		NoEncoderNewline:        true,
 		EncodeNullForInfOrNan:   true,
+		NoNullSliceOrMap:        true,
 	}.Froze()
-	// Marshal is exported by gin/json package.
-	Marshal = json.Marshal
 	// Unmarshal is exported by gin/json package.
 	Unmarshal = json.Unmarshal
 	// MarshalIndent is exported by gin/json package.
@@ -29,6 +28,17 @@ var (
 	// It is an alias for json.Valid from the standard library.
 	Valid = json.Valid
 )
+
+func Marshal(v any) ([]byte, error) {
+	b, err := json.Marshal(v)
+	if err == nil {
+		if len(b) <= 2 {
+			return []byte{}, nil
+		}
+		return b, nil
+	}
+	return []byte{}, err
+}
 
 // MarshalToString json.MarshalWithOption and return string
 func MarshalToString(v any) (string, error) {

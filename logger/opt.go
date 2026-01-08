@@ -8,36 +8,26 @@ import (
 )
 
 const (
-	defaultFileSize   = 1024 * 1024 * 1000    // 1000mb
-	defaultBufferSize = 1024 * 4              // 4kb
-	fileTimeFormat    = "Jan021504"           // 日志文件命名格式
-	ShortTimeFormat   = "15:04:05.000 "       // ShortTimeFormat 日志事件戳格式
-	LongTimeFormat    = "Jan02 15:04:05.000 " // 2006-01-02 15:04:05.000 "
+	defaultFileSize = 1024 * 1024 * 1000    // 1000mb
+	fileTimeFormat  = "Jan02.1504"          // 日志文件命名格式
+	ShortTimeFormat = "15:04:05.000 "       // ShortTimeFormat 日志事件戳格式
+	LongTimeFormat  = "Jan02 15:04:05.000 " // 2006-01-02 15:04:05.000 "
 )
 
 var lineEnd = []byte{10}
 
-type CompressMethod string
-
-const (
-	CompressNone   CompressMethod = "none"
-	CompressSnappy CompressMethod = "snappy"
-	CompressZstd   CompressMethod = "zstd"
-	CompressGzip   CompressMethod = "gzip"
-)
-
 type writerOpt struct {
-	compress       CompressMethod // compress 压缩方式， none-不压缩, snappy-snappy压缩, zstd-zstd压缩, gzip-gzip压缩
-	filename       string         // filename 日志文件名，不需要扩展名，会自动追加时间戳以及.log扩展名，为空时其他参数无效，仅输出到控制台
-	timeformat     string         // timeformat 日志时间戳格式
-	backupformat   string         // backupformat 备份文件时间戳格式
-	dir            string         // dir 日志文件存放目录
-	file           string         // file 日志文件名，不包含路径
-	maxsize        int64          // maxsize 日志文件最大大小，超过后会自动切割
-	bufferSize     int            // bufferSize 日志缓冲区大小
-	maxdays        int            // maxdays 日志文件最大保存天数
-	maxbackups     int            // maxbackups 最大备份数量
-	bufferDisabled bool           // bufferDisabled 是否禁用缓冲区，禁用后每次写入都会直接写入文件，影响性能但不易丢失日志
+	compress     pathtool.CompressMethod // compress 压缩方式， none-不压缩, snappy-snappy压缩, zstd-zstd压缩, gzip-gzip压缩
+	filename     string                  // filename 日志文件名，会自动追加时间戳以及.log扩展名，为空时其他参数无效，仅输出到控制台
+	timeformat   string                  // timeformat 日志时间戳格式
+	backupformat string                  // backupformat 备份文件时间戳格式
+	dir          string                  // dir 日志文件存放目录
+	file         string                  // file 日志文件名，不包含路径
+	rollmsg      string                  // rollmsg 日志切割时的提示信息
+	maxsize      int64                   // maxsize 日志文件最大大小，超过后会自动切割
+	bufferSize   int                     // bufferSize 日志缓冲区大小
+	maxdays      int                     // maxdays 日志文件最大保存天数
+	maxbackups   int                     // maxbackups 最大备份数量
 }
 
 type writerOpts func(opt *writerOpt)
@@ -49,11 +39,7 @@ type writerOpts func(opt *writerOpt)
 // The default buffer size is 4KB.
 func WithBufferSize(size int) writerOpts {
 	return func(o *writerOpt) {
-		if size == 0 {
-			o.bufferDisabled = true
-		} else {
-			o.bufferSize = min(max(size, 0), 1024*1024)
-		}
+		o.bufferSize = min(max(size, 1), 1024*1024)
 	}
 }
 
@@ -68,7 +54,7 @@ func WithMaxDays(days int) writerOpts {
 }
 
 // WithCompressMethod sets the compression method for the logger.
-func WithCompressMethod(method CompressMethod) writerOpts {
+func WithCompressMethod(method pathtool.CompressMethod) writerOpts {
 	return func(o *writerOpt) {
 		o.compress = method
 	}
@@ -115,16 +101,26 @@ func WithMaxBackups(backups int) writerOpts {
 func WithBackupFormat(format string) writerOpts {
 	return func(o *writerOpt) {
 		o.backupformat = format
+		if o.backupformat == "" {
+			o.backupformat = fileTimeFormat
+		}
+	}
+}
+
+// WithRollMessage sets the roll message for the logger.
+func WithRollMessage(msg string) writerOpts {
+	return func(o *writerOpt) {
+		o.rollmsg = msg
 	}
 }
 
 func defaultWriterOpts() *writerOpt {
 	return &writerOpt{
 		filename:     "",
-		compress:     CompressNone,
+		compress:     pathtool.CompressNone,
 		backupformat: fileTimeFormat,
 		timeformat:   LongTimeFormat,
-		bufferSize:   defaultBufferSize,
+		bufferSize:   1,
 		maxsize:      defaultFileSize,
 		maxdays:      0,
 		maxbackups:   10,

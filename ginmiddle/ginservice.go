@@ -17,7 +17,6 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/xyzj/toolbox"
-	"github.com/xyzj/toolbox/loopfunc"
 )
 
 /*
@@ -82,11 +81,10 @@ func ListenAndServeWithOption(opts ...Opts) {
 		o(&opt)
 	}
 	if opt.http+opt.https == "" {
-		opt.logg.Error("no service port is valid")
+		opt.out.Write([]byte("http and https addr is empty\n"))
 		os.Exit(1)
 	}
 	// 路由处理
-	findRoot := false
 	findIcon := false
 	h := opt.engine
 	if opt.engineFunc != nil {
@@ -94,21 +92,13 @@ func ListenAndServeWithOption(opts ...Opts) {
 	}
 	if h == nil {
 		h = gin.New()
+
 	}
 	for _, v := range h.Routes() {
-		if v.Path == "/" {
-			findRoot = true
-			continue
-		}
 		if v.Path == "/favicon.ico" {
 			findIcon = true
-		}
-		if findRoot && findIcon {
 			break
 		}
-	}
-	if !findRoot {
-		h.GET("/", PageDefault)
 	}
 	if !findIcon {
 		h.GET("/favicon.ico", func(c *gin.Context) {
@@ -119,7 +109,7 @@ func ListenAndServeWithOption(opts ...Opts) {
 	// 启动https服务
 	if opt.https != "" {
 		wg.Add(1)
-		loopfunc.GoFunc(func(params ...interface{}) {
+		go func() {
 			defer wg.Done()
 			s := &http.Server{
 				Addr:         opt.https,
@@ -133,11 +123,11 @@ func ListenAndServeWithOption(opts ...Opts) {
 			if err := s.ListenAndServeTLS("", ""); err != nil {
 				fmt.Fprintf(os.Stdout, "%s [%s] %s\n", time.Now().Format(toolbox.ShortTimeFormat), "HTTP", "Start HTTPS server error: "+err.Error())
 			}
-		}, "https", os.Stdout)
+		}()
 	}
 	if opt.http != "" {
 		wg.Add(1)
-		loopfunc.GoFunc(func(params ...interface{}) {
+		go func() {
 			defer wg.Done()
 			s := &http.Server{
 				Addr:         opt.http,
@@ -150,7 +140,7 @@ func ListenAndServeWithOption(opts ...Opts) {
 			if err := s.ListenAndServe(); err != nil {
 				fmt.Fprintf(os.Stdout, "%s [%s] %s\n", time.Now().Format(toolbox.ShortTimeFormat), "HTTP", "Start HTTP server error: "+err.Error())
 			}
-		}, "http", os.Stdout)
+		}()
 	}
 	wg.Wait()
 }
@@ -161,7 +151,7 @@ func LiteEngine(w io.Writer, hosts ...string) *gin.Engine {
 	// 特殊路由处理
 	r.HandleMethodNotAllowed = true
 	r.NoMethod(Page405)
-	r.NoRoute(Page404Big)
+	r.NoRoute(Page404Code)
 	// 允许跨域
 	r.Use(cors.New(cors.Config{
 		MaxAge:           time.Hour * 24,
@@ -172,23 +162,20 @@ func LiteEngine(w io.Writer, hosts ...string) *gin.Engine {
 		AllowMethods:     []string{"*"},
 		AllowHeaders:     []string{"*"},
 	}))
-	// 处理转发ip
-	// r.Use(XForwardedIP())
+	// 故障恢复
+	r.Use(gin.RecoveryWithWriter(w))
 	// 配置日志
 	r.Use(LogToWriter(w))
-	// 故障恢复
-	r.Use(Recovery())
 	// 绑定域名
-	r.Use(bindHosts(hosts...))
+	if len(hosts) > 0 {
+		r.Use(bindHosts(hosts...))
+	}
 	// 数据压缩
 	// r.Use(gingzip.Gzip(6))
 	return r
 }
 
 func bindHosts(hosts ...string) gin.HandlerFunc {
-	if len(hosts) == 0 {
-		return func(c *gin.Context) {}
-	}
 	return func(c *gin.Context) {
 		host, _, _ := net.SplitHostPort(c.Request.Host)
 		nohost := true

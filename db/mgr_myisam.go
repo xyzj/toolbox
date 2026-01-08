@@ -2,6 +2,8 @@ package db
 
 import (
 	"errors"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -35,8 +37,10 @@ func (d *Conn) MergeTable(dbname, tableName string, maxSubTables, maxTableSize, 
 		return errors.New(dbname + "." + tableName + "'s engine is not 'mrg-myisam'")
 	}
 	// 找到所有以指定命名开头的所有表
-	strsql = "select table_name from information_schema.tables where table_schema=? and engine='MyISAM' and table_type='BASE TABLE' and table_name like '" + tableName + "_%' order by create_time desc,table_name desc limit ?"
-	ans, err = d.QueryByDB(dbidx, strsql, 0, dbname, maxSubTables)
+
+	// strsql = "select table_name from information_schema.tables where table_schema=? and engine='MyISAM' and table_type='BASE TABLE' and table_name like '" + tableName + "_%' order by create_time desc,table_name desc limit ?"
+	strsql = "select table_name from information_schema.tables where table_schema=? and engine='MyISAM' and table_type='BASE TABLE' and table_name like '" + tableName + "_%'" // 取消数据库查询，手动排序截取
+	ans, err = d.QueryByDB(dbidx, strsql, 0, dbname)
 	if err != nil {
 		return err
 	}
@@ -47,6 +51,12 @@ func (d *Conn) MergeTable(dbname, tableName string, maxSubTables, maxTableSize, 
 	if len(subTablelist) == 0 {
 		return errors.New("no sub tables found")
 	}
+	sort.Slice(subTablelist, func(i, j int) bool {
+		ic, _ := strconv.Atoi(strings.TrimPrefix(subTablelist[i], tableName+"_"))
+		jc, _ := strconv.Atoi(strings.TrimPrefix(subTablelist[j], tableName+"_"))
+		return ic > jc
+	})
+	subTablelist = subTablelist[:min(maxSubTables, len(subTablelist))]
 	// 检查子表大小
 	strsql = `select round(sum(DATA_LENGTH/1000000)),sum(table_rows) from information_schema.tables where table_schema=? and table_name=?`
 	ans, err = d.QueryByDB(dbidx, strsql, 1, dbname, subTablelist[0])

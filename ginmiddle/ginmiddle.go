@@ -120,6 +120,10 @@ func GetClientAddr(c *gin.Context) string {
 	}
 	return ip + ":" + port
 }
+func GetClientIP(c *gin.Context) string {
+	ip, _ := GetClientIPPort(c)
+	return ip
+}
 
 // GetSocketTimeout 获取超时时间
 func GetSocketTimeout() time.Duration {

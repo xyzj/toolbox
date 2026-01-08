@@ -10,7 +10,7 @@ func TestBolt(t *testing.T) {
 	// s1 := toolbox.GetRandomString(30, true)
 	db, err := NewBolt(pathtool.JoinPathFromHere("big.db"))
 	if err != nil {
-		t.Fatalf(err.Error())
+		t.Fatal(err.Error())
 		return
 	}
 	println(db.Read("1"))

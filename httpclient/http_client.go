@@ -39,6 +39,7 @@ const (
 	HEADER_VALUE_JSON      = "application/json; charset=utf-8"
 	HEADER_VALUE_HTML      = "text/html; charset=utf-8"
 	HEADER_VALUE_ZSTD      = "zstd"
+	HEADER_VALUE_ZLIB      = "zlib"
 	LogFormater            = "[req] |%d| %-13s |%s %s > %s"
 	LogErrFormater         = "[req] |%d| %s %s > %s"
 )

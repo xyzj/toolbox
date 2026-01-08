@@ -2,19 +2,20 @@ package ginmiddleware
 
 import (
 	"crypto/tls"
+	"io"
 	"net"
+	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/xyzj/toolbox/crypto"
-	"github.com/xyzj/toolbox/logger"
 )
 
 var defaultOpt = Opt{
 	readTimeout:  time.Second * 120,
 	writeTimeout: time.Second * 120,
 	idleTimeout:  time.Second * 60,
-	logg:         logger.NewConsoleLogger(),
+	out:          os.Stdout,
 	hosts:        make([]string, 0),
 	http:         ":6880",
 	debug:        false,
@@ -27,7 +28,7 @@ type Opt struct {
 	hosts        []string
 	engine       *gin.Engine
 	tlsc         *tls.Config
-	logg         logger.Logger
+	out          io.Writer
 	readTimeout  time.Duration
 	writeTimeout time.Duration
 	idleTimeout  time.Duration
@@ -54,9 +55,9 @@ func OptHosts(hosts ...string) Opts {
 	}
 }
 
-func OptLogger(l logger.Logger) Opts {
+func OptWriter(w io.Writer) Opts {
 	return func(opt *Opt) {
-		opt.logg = l
+		opt.out = w
 	}
 }
 

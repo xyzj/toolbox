@@ -3,6 +3,7 @@ package pathtool
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -180,6 +181,42 @@ func EnsureDirAndSplit(p string) (string, string, error) {
 	}
 
 	return absDir, filename, nil
+}
+
+// CopyFile 复制文件到指定路径，若目标目录不存在则自动创建，保持源文件权限。
+func CopyFile(src, dst string) error {
+	if strings.TrimSpace(src) == "" || strings.TrimSpace(dst) == "" {
+		return fmt.Errorf("source or destination is empty")
+	}
+
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return fmt.Errorf("stat source: %w", err)
+	}
+	if !srcInfo.Mode().IsRegular() {
+		return fmt.Errorf("source is not a regular file")
+	}
+
+	in, err := os.OpenFile(src, os.O_RDONLY, 0)
+	if err != nil {
+		return fmt.Errorf("open source: %w", err)
+	}
+	defer in.Close()
+
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return fmt.Errorf("make dest dir: %w", err)
+	}
+
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, srcInfo.Mode().Perm())
+	if err != nil {
+		return fmt.Errorf("open dest: %w", err)
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return fmt.Errorf("copy data: %w", err)
+	}
+	return nil
 }
 
 type FileInfo struct {

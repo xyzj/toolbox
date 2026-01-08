@@ -156,11 +156,11 @@ func StartRecord(opt *RecordOpt) *Recorder {
 	return r
 }
 
-func (r *Recorder) Import(s []byte) {
+func (r *Recorder) Import(s []byte) error {
 	d := []*procStatus{}
 	err := json.Unmarshal(s, &d)
 	if err != nil {
-		return
+		return err
 	}
 	for _, v := range d {
 		if v == nil || v.Dt == 0 {
@@ -168,6 +168,7 @@ func (r *Recorder) Import(s []byte) {
 		}
 		r.procCache.Store(v)
 	}
+	return nil
 }
 
 func (r *Recorder) Export() []byte {
