@@ -3,7 +3,8 @@
 package json
 
 import (
-	// json "encoding/json/v2"
+	gojson "encoding/json"
+
 	json "github.com/goccy/go-json"
 )
 
@@ -12,6 +13,8 @@ var (
 	Valid = json.Valid
 	// MarshalIndent 带缩进的序列化
 	MarshalIndent = json.MarshalIndent
+
+	Compact = gojson.Compact
 )
 
 // Marshal json.MarshalWithOption

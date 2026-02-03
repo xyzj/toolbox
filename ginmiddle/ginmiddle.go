@@ -468,3 +468,33 @@ func BasicAuth(accountpairs ...string) gin.HandlerFunc {
 		c.AbortWithStatus(http.StatusUnauthorized)
 	}
 }
+func SecurityHeadersMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 1. 防范 XSS 和内容注入 (最重要但也最容易引起兼容性问题)
+		// 注意：如果你的网页有外部 CDN 的 JS/CSS，需要在这里配置白名单
+		// c.Header("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';")
+
+		// 2. 强制使用 HTTPS (HSTS) - 仅在你的服务支持 HTTPS 时开启
+		// c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+
+		// 3. 防范点击劫持
+		c.Header("X-Frame-Options", "SAMEORIGIN")
+
+		// 4. 禁止 MIME 类型嗅探
+		c.Header("X-Content-Type-Options", "nosniff")
+
+		// 5. 开启 XSS 保护
+		c.Header("X-XSS-Protection", "1; mode=block")
+
+		// 6. 控制 Referrer 信息
+		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
+
+		// 7. 针对 IE 限制直接运行下载的文件
+		c.Header("X-Download-Options", "noopen")
+
+		// 8. 限制跨域策略文件 (Flash/PDF)
+		c.Header("X-Permitted-Cross-Domain-Policies", "none")
+
+		c.Next()
+	}
+}

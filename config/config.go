@@ -44,6 +44,10 @@ func (i *Item) String() string {
 			xcom = "# " + v + "\n"
 		}
 	}
+	xcom = strings.TrimSpace(xcom)
+	if xcom == "" {
+		return "\n" + i.Key + "=" + i.Value.String() + "\n"
+	}
 	return "\n" + xcom + i.Key + "=" + i.Value.String() + "\n" // fmt.Sprintf("\n%s%s=%s\n", xcom, i.Key, i.Value)
 }
 
@@ -78,14 +82,13 @@ func (f *File) Clear() {
 
 // DelItem 删除配置项
 func (f *File) DelItem(key string) {
+	key = strings.TrimSpace(key)
 	f.items.Delete(key)
 }
 
 // PutItem 添加配置项
 func (f *File) PutItem(item *Item) {
-	// if item.EncryptValue {
-	// 	item.Value = NewValue(toolbox.CodeString(item.Value.String()))
-	// }
+	item.Key = strings.TrimSpace(item.Key)
 	if v, ok := f.items.Load(item.Key); ok {
 		if item.Comment == "" {
 			item.Comment = v.Comment
@@ -96,6 +99,7 @@ func (f *File) PutItem(item *Item) {
 
 // GetDefault 读取一个配置，若不存在，则添加这个配置
 func (f *File) GetDefault(item *Item) *Value {
+	item.Key = strings.TrimSpace(item.Key)
 	if v, ok := f.items.Load(item.Key); ok {
 		return v.Value
 	}
@@ -215,7 +219,10 @@ func (f *File) FromFile(configfile string) error {
 		if len(it) != 2 {
 			continue
 		}
-		f.items.Store(it[0], &Item{Key: it[0], Value: NewValue(it[1]), Comment: strings.Join(tip, "\n")})
+		f.items.Store(strings.TrimSpace(it[0]),
+			&Item{Key: strings.TrimSpace(it[0]),
+				Value:   NewValue(strings.TrimSpace(it[1])),
+				Comment: strings.Join(tip, "\n")})
 		tip = []string{}
 	}
 	return nil

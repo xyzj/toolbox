@@ -122,7 +122,8 @@ func (sessn *Session) handleReconnect() {
 				sessn.logger.Error(errors.WithStack(err.(error)).Error())
 			}
 		}()
-		t := time.NewTicker(7 * time.Second)
+		ti := time.Second * 7
+		t := time.NewTimer(ti)
 		for {
 			if sessn.closeMe {
 				break
@@ -135,6 +136,7 @@ func (sessn *Session) handleReconnect() {
 				sessn.connection = nil
 			case <-t.C:
 				if sessn.IsReady() {
+					t.Reset(ti)
 					continue
 				}
 				if sessn.connect() {
@@ -145,6 +147,7 @@ func (sessn *Session) handleReconnect() {
 						sessn.initProducer()
 					}
 				}
+				t.Reset(ti)
 			}
 		}
 	}()
@@ -204,17 +207,23 @@ func (sessn *Session) IsReady() bool {
 	return !sessn.connection.IsClosed()
 }
 
-// WaitReady 等待就绪，0-默认超时5s
+// WaitReady 等待就绪
 func (sessn *Session) WaitReady(second int) bool {
-	if second == 0 {
-		second = 5
+	second = min(10, max(1, second))
+	tc := time.NewTicker(time.Second)
+	cnt := 0
+	for {
+		<-tc.C
+		if sessn.IsReady() {
+			tc.Stop()
+			return true
+		}
+		cnt++
+		if cnt >= second {
+			tc.Stop()
+			return false
+		}
 	}
-	time.Sleep(time.Second)
-	tc := time.NewTicker(time.Second * time.Duration(second))
-	for range tc.C {
-		return sessn.IsReady()
-	}
-	return false
 }
 
 // Close 关闭

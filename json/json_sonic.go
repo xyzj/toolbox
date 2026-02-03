@@ -6,7 +6,11 @@
 
 package json
 
-import "github.com/bytedance/sonic"
+import (
+	gojson "encoding/json"
+
+	"github.com/bytedance/sonic"
+)
 
 var (
 	json = sonic.Config{
@@ -27,6 +31,8 @@ var (
 	// Valid reports whether the provided byte slice is valid JSON.
 	// It is an alias for json.Valid from the standard library.
 	Valid = json.Valid
+
+	Compact = gojson.Compact
 )
 
 func Marshal(v any) ([]byte, error) {

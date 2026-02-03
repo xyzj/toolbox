@@ -164,13 +164,15 @@ func (t *TCPManager) Listen() error {
 							cli.disconnect(fmt.Sprintf("send panic, %+v", err))
 						}
 					}()
-					t1 := time.NewTicker(time.Second * time.Duration(rand.Int31n(10)+20))
+					t1i := time.Second * time.Duration(rand.Int31n(10)+20)
+					t1 := time.NewTimer(t1i)
 					for !cli.closed.Load() {
 						select {
 						case <-cli.closeCtx.Done():
 							return
 						case <-t1.C:
 							freport()
+							t1.Reset(t1i)
 						default:
 							cli.send()
 						}

@@ -146,8 +146,6 @@ func (w *Writer) Close() error {
 
 // Write writes the given byte slice to the log writer.
 func (w *Writer) Write(b []byte) (n int, err error) {
-	w.locker.Lock()
-	defer w.locker.Unlock()
 	if w.closed.Load() {
 		return 0, nil
 	}
@@ -160,6 +158,8 @@ func (w *Writer) Write(b []byte) (n int, err error) {
 	if w.cnf.filename == "" { // console writer
 		return w.fno.Write(*w.formatdata(b))
 	}
+	w.locker.Lock()
+	defer w.locker.Unlock()
 	w.n, w.err = w.buff.Write(*w.formatdata(b))
 	if w.n > 0 && w.cnf.maxsize > 0 {
 		w.currentSize.Add(int64(w.n))
@@ -191,7 +191,8 @@ func NewWriter(opts ...writerOpts) io.Writer {
 	w.ctxClose = ctxClose
 	w.ctxCancel = ctxCancel
 	go loopfunc.LoopFunc(func(params ...any) {
-		t := time.NewTicker(time.Minute)
+		ti := time.Minute * 5
+		t := time.NewTimer(ti)
 		for {
 			select {
 			case <-w.ctxClose.Done():
@@ -221,6 +222,7 @@ func NewWriter(opts ...writerOpts) io.Writer {
 					}
 				}
 				w.locker.Unlock()
+				t.Reset(ti)
 			}
 		}
 	}, "log writer", os.Stdout)

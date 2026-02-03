@@ -17,11 +17,12 @@ type cData[T any] struct {
 
 // AnyCache 泛型结构缓存
 type AnyCache[T any] struct {
-	cache        *mapfx.StructMap[string, cData[T]]
-	cacheCleanup *time.Ticker
-	cacheExpire  time.Duration
-	closed       atomic.Bool
-	closeChan    chan bool
+	cache           *mapfx.StructMap[string, cData[T]]
+	cacheCleanup    *time.Ticker
+	cleanupInterval time.Duration
+	cacheExpire     time.Duration
+	closed          atomic.Bool
+	closeChan       chan bool
 }
 
 // NewAnyCacheWithExpireFunc initializes a new cache with a specified expiration time and an optional expiration function.
@@ -39,11 +40,11 @@ func NewAnyCacheWithExpireFunc[T any](expire time.Duration, expireFunc func(map[
 	x := &AnyCache[T]{
 		cacheExpire:  expire,
 		cache:        mapfx.NewStructMap[string, cData[T]](),
-		cacheCleanup: time.NewTicker(time.Second * 60),
+		cacheCleanup: time.NewTicker(time.Minute),
 		closeChan:    make(chan bool, 1),
 	}
 	x.closed.Store(false)
-	go loopfunc.LoopFunc(func(params ...interface{}) {
+	go loopfunc.LoopFunc(func(params ...any) {
 		for {
 			select {
 			case <-x.closeChan:
@@ -61,11 +62,12 @@ func NewAnyCacheWithExpireFunc[T any](expire time.Duration, expireFunc func(map[
 				if len(keys) > 0 {
 					x.cache.DeleteMore(keys...)
 					if expireFunc != nil {
-						loopfunc.GoFunc(func(params ...interface{}) {
+						loopfunc.GoFunc(func(params ...any) {
 							expireFunc(ex)
 						}, "expire func", logger.NewConsoleWriter())
 					}
 				}
+
 			}
 		}
 	}, "any cache", logger.NewConsoleWriter())

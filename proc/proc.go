@@ -142,7 +142,8 @@ func StartRecord(opt *RecordOpt) *Recorder {
 			r.lastProc.Dt = time.Now().Unix()
 			r.procCache.Store(deepcopy.CopyAny(r.lastProc))
 		}
-		t := time.NewTicker(r.opt.Timer)
+
+		t := time.NewTimer(r.opt.Timer)
 		c := 0
 		for range t.C {
 			f()
@@ -151,6 +152,7 @@ func StartRecord(opt *RecordOpt) *Recorder {
 				c = 0
 				opt.Logg.Info("[PROC] " + r.lastProc.String())
 			}
+			t.Reset(r.opt.Timer)
 		}
 	}, "proc", opt.Logg.DefaultWriter())
 	return r

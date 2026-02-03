@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -56,6 +57,41 @@ var (
 		LessThanOneMinute: "less than 1 minute",
 	}
 )
+
+// 1. 定义一个兼容类型
+type FlexibleInt64 int64
+
+// 2. 实现 UnmarshalJSON 接口
+func (f *FlexibleInt64) UnmarshalJSON(data []byte) error {
+	// 尝试直接作为数字解析
+	var i int64
+	if err := json.Unmarshal(data, &i); err == nil {
+		*f = FlexibleInt64(i)
+		return nil
+	}
+
+	// 如果失败，尝试作为字符串解析
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return fmt.Errorf("flexibleInt64: 既不是数字也不是字符串: %s", err)
+	}
+
+	// 将字符串转为 int64
+	val, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return fmt.Errorf("flexibleInt64: 字符串转换失败: %s", err)
+	}
+	*f = FlexibleInt64(val)
+	return nil
+}
+func (f *FlexibleInt64) Int64() int64 {
+	return int64(*f)
+}
+
+// String 方便打印
+func (f *FlexibleInt64) String() string {
+	return strconv.FormatInt(int64(*f), 10)
+}
 
 // GbkToUtf8 gbk编码转utf8
 func GbkToUtf8(s []byte) ([]byte, error) {
