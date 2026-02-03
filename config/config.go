@@ -44,10 +44,6 @@ func (i *Item) String() string {
 			xcom = "# " + v + "\n"
 		}
 	}
-	xcom = strings.TrimSpace(xcom)
-	if xcom == "" {
-		return "\n" + i.Key + "=" + i.Value.String() + "\n"
-	}
 	return "\n" + xcom + i.Key + "=" + i.Value.String() + "\n" // fmt.Sprintf("\n%s%s=%s\n", xcom, i.Key, i.Value)
 }
 
