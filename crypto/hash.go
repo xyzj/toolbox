@@ -6,7 +6,9 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
+	"encoding/hex"
 	"hash"
+	"hash/crc32"
 
 	"github.com/tjfoc/gmsm/sm3"
 	gopool "github.com/xyzj/go-pool"
@@ -142,4 +144,14 @@ func NewHash(t HashType, opts ...HashOpts) *HASH {
 	// 	w.hash = sm3.New()
 	// }
 	// return w
+}
+
+func Crc32IEEE(b []byte) string {
+	v := crc32.ChecksumIEEE(b)
+	var sumBuf [4]byte
+	sumBuf[0] = byte(v >> 24)
+	sumBuf[1] = byte(v >> 16)
+	sumBuf[2] = byte(v >> 8)
+	sumBuf[3] = byte(v)
+	return hex.EncodeToString(sumBuf[:])
 }

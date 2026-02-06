@@ -10,15 +10,12 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	mydsn "github.com/go-sql-driver/mysql"
 	msdsn "github.com/microsoft/go-mssqldb/msdsn"
 	"github.com/xyzj/toolbox"
 	"github.com/xyzj/toolbox/cache"
-	"github.com/xyzj/toolbox/config"
-	"github.com/xyzj/toolbox/json"
 	"github.com/xyzj/toolbox/logger"
 	mysql "gorm.io/driver/mysql"
 	pgsql "gorm.io/driver/postgres"
@@ -67,47 +64,6 @@ type Opt struct {
 	// 执行超时
 	Timeout     time.Duration
 	enableCache bool
-}
-
-// QueryDataChan chan方式返回首页数据
-type QueryDataChan struct {
-	Locker *sync.WaitGroup
-	Data   *QueryData
-	Total  *int
-	Err    error
-}
-
-func newDataRow(cols int) *QueryDataRow {
-	return &QueryDataRow{
-		Cells:  make([]string, cols),
-		VCells: make([]*config.Value, cols),
-		// vCell:  make([]*VCell, cols),
-	}
-}
-
-// QueryDataRow 数据行
-type QueryDataRow struct {
-	// Deprecated: will removed in a future version, use VCells
-	Cells  []string        `json:"cells,omitempty"`
-	VCells []*config.Value `json:"vcells,omitempty"`
-}
-
-func (d *QueryDataRow) JSON() string {
-	s, _ := json.MarshalToString(d)
-	return s
-}
-
-// QueryData 数据集
-type QueryData struct {
-	Rows     []*QueryDataRow `json:"rows,omitempty"`
-	Columns  []string        `json:"columns,omitempty"`
-	CacheTag string          `json:"cache_tag,omitempty"`
-	Total    int             `json:"total,omitempty"`
-}
-
-func (d *QueryData) JSON() (string, error) {
-	return json.MarshalToString(d)
-	// return s
 }
 
 type dbs struct {
@@ -424,7 +380,7 @@ func checkSQL(s string) error {
 func newResult() *QueryData {
 	return &QueryData{
 		Columns: []string{},
-		Rows:    []*QueryDataRow{},
+		Rows:    []QueryDataRow{},
 	}
 }
 

@@ -4,14 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/xyzj/toolbox/config"
-	"github.com/xyzj/toolbox/crypto"
-	"github.com/xyzj/toolbox/json"
 )
 
 // QueryMultirowPage 执行查询语句，返回QueryData结构，检测多个字段进行换行计数
@@ -22,7 +18,7 @@ import (
 // keyColumeID: 用于分页的关键列id
 // rowsCount: 返回数据行数，0-返回全部
 // params: 查询参数,对应查询语句中的`？`占位符
-func (d *Conn) QueryMultirowPage(dbidx int, s string, rowsCount int, keyColumeID int, params ...interface{}) (query *QueryData, err error) {
+func (d *Conn) QueryMultirowPage(dbidx int, s string, rowsCount int, keyColumeID int, params ...any) (query *QueryData, err error) {
 	if keyColumeID == -1 {
 		return d.Query(s, rowsCount, params...)
 	}
@@ -56,13 +52,13 @@ func (d *Conn) QueryMultirowPage(dbidx int, s string, rowsCount int, keyColumeID
 	queryCache.Columns = columns
 
 	count := len(columns)
-	values := make([]interface{}, count)
-	scanArgs := make([]interface{}, count)
+	values := make([]any, count)
+	scanArgs := make([]any, count)
 
 	for i := range values {
 		scanArgs[i] = &values[i]
 	}
-	queryCache.Rows = make([]*QueryDataRow, 0)
+	queryCache.Rows = make([]QueryDataRow, 0, 1024)
 	rowIdx := 0
 	limit := 0
 	realIdx := 0
@@ -75,34 +71,36 @@ func (d *Conn) QueryMultirowPage(dbidx int, s string, rowsCount int, keyColumeID
 		row := newDataRow(count)
 		for k, v := range values {
 			if v == nil {
-				row.VCells[k] = config.EmptyValue
+				row.VCells[k] = EmptyValue
 				continue
 			}
-			if b, ok := v.(int64); ok {
-				row.VCells[k] = config.NewInt64Value(b)
-			} else if b, ok := v.(float32); ok {
-				row.VCells[k] = config.NewFloat64Value(float64(b))
-			} else if b, ok := v.([]uint8); ok {
-				row.VCells[k] = config.NewValue(json.String(b))
-			} else if b, ok := v.(time.Time); ok {
-				row.VCells[k] = config.NewValue(b.Format("2006-01-02 15:04:05"))
-			} else if b, ok := v.(uint64); ok {
-				row.VCells[k] = config.NewUint64Value(b)
-			} else if b, ok := v.(float64); ok {
-				row.VCells[k] = config.NewFloat64Value(b)
-			} else {
-				row.VCells[k] = config.NewValue(fmt.Sprintf("%v", v))
-			}
+			row.VCells[k] = Value{val: v}
+			// switch b := v.(type) {
+			// case int64:
+			// 	row.VCells[k] = &Value{val: b, typ: tint64}
+			// case float32:
+			// 	row.VCells[k] = &Value{val: b, typ: tfloat32}
+			// case []uint8:
+			// 	row.VCells[k] = &Value{val: json.String(b), typ: tstr}
+			// case time.Time:
+			// 	row.VCells[k] = &Value{val: b.Unix(), typ: tint64}
+			// case uint64:
+			// 	row.VCells[k] = &Value{val: b, typ: tuint64}
+			// case float64:
+			// 	row.VCells[k] = &Value{val: b, typ: tfloat64}
+			// default:
+			// 	row.VCells[k] = &Value{val: fmt.Sprintf("%v", v), typ: tstr}
+			// }
 			// will be removed in the future
 			row.Cells[k] = row.VCells[k].String()
 		}
 		queryCache.Rows = append(queryCache.Rows, row)
 		if keyItem == "" {
-			keyItem = row.Cells[keyColumeID]
+			keyItem = row.VCells[keyColumeID].String()
 			rowIdx++
 		}
-		if keyItem != row.Cells[keyColumeID] {
-			keyItem = row.Cells[keyColumeID]
+		if keyItem != row.VCells[keyColumeID].String() {
+			keyItem = row.VCells[keyColumeID].String()
 			rowIdx++
 		}
 		if rowIdx == rowsCount-1 {
@@ -140,7 +138,7 @@ func (d *Conn) QueryMultirowPage(dbidx int, s string, rowsCount int, keyColumeID
 // startRow: 起始行号，0开始
 // rowsCount: 返回数据行数，0-返回全部
 // params: 查询参数,对应查询语句中的`？`占位符
-func (d *Conn) QueryLimit(s string, startRow, rowsCount int, params ...interface{}) (*QueryData, error) {
+func (d *Conn) QueryLimit(s string, startRow, rowsCount int, params ...any) (*QueryData, error) {
 	if startRow+rowsCount == 0 {
 		return d.Query(s, rowsCount, params...)
 	}
@@ -164,7 +162,7 @@ func (d *Conn) QueryLimit(s string, startRow, rowsCount int, params ...interface
 // startRow: 起始行号，0开始
 // rowsCount: 返回数据行数，0-返回全部
 // params: 查询参数,对应查询语句中的`？`占位符
-func (d *Conn) QueryBig(dbidx int, s string, rowsCount int, params ...interface{}) (*QueryData, error) {
+func (d *Conn) QueryBig(dbidx int, s string, rowsCount int, params ...any) (*QueryData, error) {
 	sqldb, err := d.SQLDB(dbidx)
 	if err != nil {
 		return nil, err
@@ -194,7 +192,7 @@ func (d *Conn) QueryBig(dbidx int, s string, rowsCount int, params ...interface{
 // s： 查询语句
 // rowsCount： 需要返回的行数
 // params： 参数
-func (d *Conn) Query(s string, rowsCount int, params ...interface{}) (*QueryData, error) {
+func (d *Conn) Query(s string, rowsCount int, params ...any) (*QueryData, error) {
 	return d.QueryByDB(d.defaultDB, s, rowsCount, params...)
 }
 
@@ -203,7 +201,7 @@ func (d *Conn) Query(s string, rowsCount int, params ...interface{}) (*QueryData
 // s： 查询语句
 // rowsCount： 需要返回的行数
 // params： 参数
-func (d *Conn) QueryFirstPage(s string, rowsCount int, params ...interface{}) (*QueryData, error) {
+func (d *Conn) QueryFirstPage(s string, rowsCount int, params ...any) (*QueryData, error) {
 	return d.QueryFirstPageByDB(d.defaultDB, s, rowsCount, params...)
 }
 
@@ -213,7 +211,7 @@ func (d *Conn) QueryFirstPage(s string, rowsCount int, params ...interface{}) (*
 // s： 查询语句
 // rowsCount： 需要返回的行数
 // params： 参数
-func (d *Conn) QueryFirstPageByDB(dbidx int, s string, rowsCount int, params ...interface{}) (*QueryData, error) {
+func (d *Conn) QueryFirstPageByDB(dbidx int, s string, rowsCount int, params ...any) (*QueryData, error) {
 	sqldb, err := d.SQLDB(dbidx)
 	if err != nil {
 		return nil, err
@@ -238,7 +236,7 @@ func (d *Conn) QueryFirstPageByDB(dbidx int, s string, rowsCount int, params ...
 // s： 查询语句
 // rowsCount： 需要返回的行数
 // params： 参数
-func (d *Conn) QueryByDB(dbidx int, s string, rowsCount int, params ...interface{}) (*QueryData, error) {
+func (d *Conn) QueryByDB(dbidx int, s string, rowsCount int, params ...any) (*QueryData, error) {
 	sqldb, err := d.SQLDB(dbidx)
 	if err != nil {
 		return nil, err
@@ -262,7 +260,7 @@ ANS:
 	return qd, err
 }
 
-func (d *Conn) queryDataChan(ctx context.Context, done context.CancelFunc, sqldb *sql.DB, ch chan *QueryDataChan, s string, rowsCount int, params ...interface{}) int {
+func (d *Conn) queryDataChan(ctx context.Context, done context.CancelFunc, sqldb *sql.DB, ch chan *QueryDataChan, s string, rowsCount int, params ...any) int {
 	defer func() {
 		if err := recover(); err != nil {
 			ch <- &QueryDataChan{
@@ -297,18 +295,22 @@ func (d *Conn) queryDataChan(ctx context.Context, done context.CancelFunc, sqldb
 		}
 		return 0
 	}
+	inilen := rowsCount
+	if inilen <= 0 {
+		inilen = 512
+	}
 	// 初始化
 	queryCache := &QueryData{
 		Columns: columns,
 		Total:   0,
-		Rows:    make([]*QueryDataRow, 0),
+		Rows:    make([]QueryDataRow, 0, inilen),
 	}
 	if rowsCount != 1 {
-		queryCache.CacheTag = d.cacheHead + crypto.GetMD5(strconv.FormatInt(time.Now().UnixNano(), 10))
+		queryCache.CacheTag = makeCacheTag(d.cacheHead)
 	}
 	count := len(columns)
-	values := make([]interface{}, count)
-	scanArgs := make([]interface{}, count)
+	values := make([]any, count)
+	scanArgs := make([]any, count)
 	for i := range values {
 		scanArgs[i] = &values[i]
 	}
@@ -327,25 +329,26 @@ func (d *Conn) queryDataChan(ctx context.Context, done context.CancelFunc, sqldb
 		row := newDataRow(count)
 		for k, v := range values {
 			if v == nil {
-				row.VCells[k] = config.EmptyValue
+				row.VCells[k] = EmptyValue
 				continue
 			}
-			// row.VCells[k] = config.NewValue(fmt.Sprintf("%v", v))
-			if b, ok := v.(int64); ok {
-				row.VCells[k] = config.NewInt64Value(b)
-			} else if b, ok := v.(float32); ok {
-				row.VCells[k] = config.NewFloat64Value(float64(b))
-			} else if b, ok := v.([]uint8); ok {
-				row.VCells[k] = config.NewValue(json.String(b))
-			} else if b, ok := v.(time.Time); ok {
-				row.VCells[k] = config.NewValue(b.Format("2006-01-02 15:04:05"))
-			} else if b, ok := v.(uint64); ok {
-				row.VCells[k] = config.NewUint64Value(b)
-			} else if b, ok := v.(float64); ok {
-				row.VCells[k] = config.NewFloat64Value(b)
-			} else {
-				row.VCells[k] = config.NewValue(fmt.Sprintf("%v", v))
-			}
+			row.VCells[k] = Value{val: v}
+			// switch b := v.(type) {
+			// case int64:
+			// 	row.VCells[k] = &Value{val: b, typ: tint64}
+			// case float32:
+			// 	row.VCells[k] = &Value{val: b, typ: tfloat32}
+			// case []uint8:
+			// 	row.VCells[k] = &Value{val: json.String(b), typ: tstr}
+			// case time.Time:
+			// 	row.VCells[k] = &Value{val: b.Unix(), typ: tint64}
+			// case uint64:
+			// 	row.VCells[k] = &Value{val: b, typ: tuint64}
+			// case float64:
+			// 	row.VCells[k] = &Value{val: b, typ: tfloat64}
+			// default:
+			// 	row.VCells[k] = &Value{val: fmt.Sprintf("%v", v), typ: tstr}
+			// }
 			// will be removed in the future
 			row.Cells[k] = row.VCells[k].String()
 		}
@@ -356,7 +359,7 @@ func (d *Conn) queryDataChan(ctx context.Context, done context.CancelFunc, sqldb
 			ch <- &QueryDataChan{
 				Data: &QueryData{
 					Rows:     queryCache.Rows[:rowIdx],
-					Total:    queryCache.Total,
+					Total:    rowIdx,
 					CacheTag: queryCache.CacheTag,
 					Columns:  queryCache.Columns,
 				},

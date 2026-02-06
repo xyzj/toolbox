@@ -1,14 +1,100 @@
 package cache
 
 import (
+	"context"
 	"fmt"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	"github.com/xyzj/toolbox/logger"
 	"github.com/xyzj/toolbox/loopfunc"
-	"github.com/xyzj/toolbox/mapfx"
 )
+
+type cacheData[T any] struct {
+	locker sync.RWMutex
+	data   map[string]*cData[T]
+}
+
+func (cd *cacheData[T]) len() int {
+	cd.locker.RLock()
+	defer cd.locker.RUnlock()
+	return len(cd.data)
+}
+func (cd *cacheData[T]) clear() {
+	cd.locker.Lock()
+	defer cd.locker.Unlock()
+	cd.data = make(map[string]*cData[T])
+}
+func (cd *cacheData[T]) store(key string, value T, expire time.Time) {
+	cd.locker.Lock()
+	defer cd.locker.Unlock()
+	cd.data[key] = &cData[T]{data: value, expire: expire}
+}
+func (cd *cacheData[T]) load(key string) (T, bool) {
+	cd.locker.RLock()
+	defer cd.locker.RUnlock()
+	v, ok := cd.data[key]
+	if !ok {
+		var x T
+		return x, false
+	}
+	if v.expire.Before(time.Now()) {
+		var x T
+		return x, false
+	}
+	return v.data, true
+}
+func (cd *cacheData[T]) delete(key ...string) {
+	cd.locker.Lock()
+	defer cd.locker.Unlock()
+	for _, k := range key {
+		delete(cd.data, k)
+	}
+}
+func (cd *cacheData[T]) clone() map[string]*cData[T] {
+	cd.locker.RLock()
+	defer cd.locker.RUnlock()
+	cloneData := make(map[string]*cData[T], len(cd.data))
+	for k, v := range cd.data {
+		cloneData[k] = v
+	}
+	return cloneData
+}
+func (cd *cacheData[T]) expire(key string, expire time.Time) bool {
+	cd.locker.Lock()
+	defer cd.locker.Unlock()
+	if v, ok := cd.data[key]; ok {
+		v.expire = expire
+		return true
+	}
+	return false
+}
+
+func (cd *cacheData[T]) foreach(f func(key string, value T) bool) {
+	cd.locker.RLock()
+	defer cd.locker.RUnlock()
+	for k, v := range cd.data {
+		if time.Now().After(v.expire) {
+			continue
+		}
+		if !f(k, v.data) {
+			break
+		}
+	}
+}
+func (cd *cacheData[T]) clearExpired() map[string]T {
+	cd.locker.Lock()
+	defer cd.locker.Unlock()
+	now := time.Now()
+	expired := make(map[string]T, len(cd.data))
+	for k, v := range cd.data {
+		if now.After(v.expire) {
+			expired[k] = v.data
+			delete(cd.data, k)
+		}
+	}
+	return expired
+}
 
 type cData[T any] struct {
 	expire time.Time
@@ -17,12 +103,14 @@ type cData[T any] struct {
 
 // AnyCache 泛型结构缓存
 type AnyCache[T any] struct {
-	cache           *mapfx.StructMap[string, cData[T]]
+	cache           *cacheData[T]
 	cacheCleanup    *time.Ticker
 	cleanupInterval time.Duration
 	cacheExpire     time.Duration
-	closed          atomic.Bool
-	closeChan       chan bool
+	closed          bool
+	closeCtx        context.Context
+	closeFunc       context.CancelFunc
+	closeOnce       sync.Once
 }
 
 // NewAnyCacheWithExpireFunc initializes a new cache with a specified expiration time and an optional expiration function.
@@ -37,37 +125,27 @@ type AnyCache[T any] struct {
 // Return:
 // - A pointer to the newly created AnyCache instance.
 func NewAnyCacheWithExpireFunc[T any](expire time.Duration, expireFunc func(map[string]T)) *AnyCache[T] {
+	ctx, cancel := context.WithCancel(context.Background())
 	x := &AnyCache[T]{
 		cacheExpire:  expire,
-		cache:        mapfx.NewStructMap[string, cData[T]](),
+		cache:        &cacheData[T]{data: make(map[string]*cData[T])},
 		cacheCleanup: time.NewTicker(time.Minute),
-		closeChan:    make(chan bool, 1),
+		closeCtx:     ctx,
+		closeFunc:    cancel,
+		closeOnce:    sync.Once{},
 	}
-	x.closed.Store(false)
 	go loopfunc.LoopFunc(func(params ...any) {
 		for {
 			select {
-			case <-x.closeChan:
+			case <-x.closeCtx.Done():
 				return
 			case <-x.cacheCleanup.C:
-				tnow := time.Now()
-				keys := make([]string, 0, x.cache.Len())
-				ex := make(map[string]T)
-				for k, v := range x.cache.Clone() {
-					if tnow.After(v.expire) {
-						keys = append(keys, k)
-						ex[k] = v.data
-					}
+				expired := x.cache.clearExpired()
+				if len(expired) > 0 && expireFunc != nil {
+					loopfunc.GoFunc(func(params ...any) {
+						expireFunc(expired)
+					}, "expire func", logger.NewConsoleWriter())
 				}
-				if len(keys) > 0 {
-					x.cache.DeleteMore(keys...)
-					if expireFunc != nil {
-						loopfunc.GoFunc(func(params ...any) {
-							expireFunc(ex)
-						}, "expire func", logger.NewConsoleWriter())
-					}
-				}
-
 			}
 		}
 	}, "any cache", logger.NewConsoleWriter())
@@ -112,11 +190,12 @@ func (ac *AnyCache[T]) SetCleanUp(cleanup time.Duration) {
 // Close closes this cache. If the cache needs to be used again, it should be reinitialized using the NewAnyCache method.
 // This method stops the cleanup goroutine, sends a signal to close the channel, clears the cache, and sets the cache pointer to nil.
 func (ac *AnyCache[T]) Close() {
-	ac.closed.Store(true)
-	ac.cacheCleanup.Stop()
-	ac.closeChan <- true
-	ac.cache.Clear()
-	ac.cache = nil
+	ac.closeOnce.Do(func() {
+		ac.closed = true
+		ac.cacheCleanup.Stop()
+		ac.closeFunc()
+		ac.cache.clear()
+	})
 }
 
 // Clear clears all the entries from the cache.
@@ -124,10 +203,10 @@ func (ac *AnyCache[T]) Close() {
 //
 // This function is safe to call concurrently with other methods of the AnyCache.
 func (ac *AnyCache[T]) Clear() {
-	if ac.closed.Load() {
+	if ac.closed {
 		return
 	}
-	ac.cache.Clear()
+	ac.cache.clear()
 }
 
 // Len returns the number of entries in the cache.
@@ -141,10 +220,10 @@ func (ac *AnyCache[T]) Clear() {
 // Return:
 //   - An integer representing the number of entries in the cache.
 func (ac *AnyCache[T]) Len() int {
-	if ac.closed.Load() {
+	if ac.closed {
 		return 0
 	}
-	return ac.cache.Len()
+	return ac.cache.len()
 }
 
 // Extension extends the expiration time of the specified cache entry by the cache's default expiration duration.
@@ -155,9 +234,7 @@ func (ac *AnyCache[T]) Len() int {
 //
 // This function is safe to call concurrently with other methods of the AnyCache.
 func (ac *AnyCache[T]) Extension(key string) {
-	if x, ok := ac.cache.LoadForUpdate(key); ok {
-		x.expire = time.Now().Add(ac.cacheExpire)
-	}
+	ac.cache.expire(key, time.Now().Add(ac.cacheExpire))
 }
 
 // Store adds a cache entry with the specified key and value.
@@ -184,17 +261,11 @@ func (ac *AnyCache[T]) Store(key string, value T) error {
 // Return:
 //   - An error if the cache is closed, otherwise nil.
 func (ac *AnyCache[T]) StoreWithExpire(key string, value T, expire time.Duration) error {
-	if ac.closed.Load() {
+	if ac.closed {
 		return fmt.Errorf("cache is closed")
 	}
-	if v, ok := ac.cache.LoadForUpdate(key); ok {
-		v.expire = time.Now().Add(expire)
-		v.data = value
-	} else {
-		ac.cache.Store(key, &cData[T]{
-			expire: time.Now().Add(expire),
-			data:   value,
-		})
+	if !ac.cache.expire(key, time.Now().Add(expire)) {
+		ac.cache.store(key, value, time.Now().Add(expire))
 	}
 	return nil
 }
@@ -209,19 +280,16 @@ func (ac *AnyCache[T]) StoreWithExpire(key string, value T, expire time.Duration
 //   - The value associated with the given key if found and not expired.
 //   - A boolean value indicating whether the key was found and not expired.
 func (ac *AnyCache[T]) Load(key string) (T, bool) {
-	x := new(T)
-	if ac.closed.Load() {
-		return *x, false
+	if ac.closed {
+		var zero T
+		return zero, false
 	}
-	v, ok := ac.cache.Load(key)
+	v, ok := ac.cache.load(key)
 	if !ok {
-		return *x, false
+		var zero T
+		return zero, false
 	}
-	if time.Now().After(v.expire) {
-		// ac.cache.Delete(key) // Deleting here would cause a lock operation, so it's done in the cleanup method instead.
-		return *x, false
-	}
-	return v.data, true
+	return v, true
 }
 
 // LoadOrStore reads or sets a cache entry.
@@ -241,16 +309,13 @@ func (ac *AnyCache[T]) Load(key string) (T, bool) {
 //   - A boolean value indicating whether the key was found and not expired.
 //     If the cache is closed, it returns the zero value of type T and false.
 func (ac *AnyCache[T]) LoadOrStore(key string, value T) (T, bool) {
-	x := new(T)
-	if ac.closed.Load() {
-		return *x, false
+	if ac.closed {
+		var zero T
+		return zero, false
 	}
-	v, ok := ac.Load(key)
+	v, ok := ac.cache.load(key)
 	if !ok {
-		ac.cache.Store(key, &cData[T]{
-			expire: time.Now().Add(ac.cacheExpire),
-			data:   value,
-		})
+		ac.cache.store(key, value, time.Now().Add(ac.cacheExpire))
 		return value, false
 	}
 	return v, true
@@ -265,10 +330,17 @@ func (ac *AnyCache[T]) LoadOrStore(key string, value T) (T, bool) {
 // Return:
 //   - None
 func (ac *AnyCache[T]) Delete(key string) {
-	if ac.closed.Load() {
+	if ac.closed {
 		return
 	}
-	ac.cache.Delete(key)
+	ac.cache.delete(key)
+}
+
+func (ac *AnyCache[T]) DeleteMore(keys ...string) {
+	if ac.closed {
+		return
+	}
+	ac.cache.delete(keys...)
 }
 
 // ForEach iterates over all the entries in the cache and applies the provided function to each entry.
@@ -282,10 +354,7 @@ func (ac *AnyCache[T]) Delete(key string) {
 // Return:
 //   - None
 func (ac *AnyCache[T]) ForEach(f func(key string, value T) bool) {
-	ac.cache.ForEach(func(key string, value *cData[T]) bool {
-		if time.Now().After(value.expire) {
-			return true
-		}
-		return f(key, value.data)
+	ac.cache.foreach(func(key string, value T) bool {
+		return f(key, value)
 	})
 }

@@ -15,9 +15,13 @@ func (d *Conn) QueryCache(cacheTag string, startRow, rowsCount int) *QueryData {
 	if rowsCount < 0 {
 		rowsCount = 0
 	}
+	inilen := rowsCount
+	if rowsCount == 0 {
+		inilen = 100
+	}
 	query := &QueryData{
 		CacheTag: cacheTag,
-		Rows:     make([]*QueryDataRow, 0),
+		Rows:     make([]QueryDataRow, 0, inilen),
 	}
 	// 开始读取
 	if src, ok := d.cfg.QueryCache.Load(cacheTag); ok {
