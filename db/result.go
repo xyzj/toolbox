@@ -100,6 +100,8 @@ func (v *Value) String() string {
 		return json.String(b)
 	case float32:
 		return strconv.FormatFloat(float64(b), 'f', -1, 32)
+	case time.Time:
+		return b.Format(defaultDateTimeFormat)
 	case int64:
 		return strconv.FormatInt(b, 10)
 	case uint64:
@@ -126,6 +128,8 @@ func (v *Value) TryInt64() int64 {
 		return b
 	case uint64:
 		return int64(b)
+	case time.Time:
+		return b.Unix()
 	case float64:
 		return int64(b)
 	case float32:
@@ -164,6 +168,8 @@ func (v *Value) TryFloat64(dec ...int) float64 {
 		val = float64(b)
 	case uint64:
 		val = float64(b)
+	case time.Time:
+		val = float64(b.Unix())
 	case bool:
 		if b {
 			val = 1
@@ -209,6 +215,8 @@ func (v *Value) TryUint64() uint64 {
 		return b
 	case int64:
 		return uint64(b)
+	case time.Time:
+		return uint64(b.Unix())
 	case float64:
 		return uint64(b)
 	case float32:

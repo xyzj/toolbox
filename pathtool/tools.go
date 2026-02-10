@@ -264,3 +264,17 @@ func SearchFilesByTime(dir, name string) ([]FileInfo, error) {
 	// }
 	// return result, nil
 }
+
+func TrimSlash(s string) string {
+	if len(s) > 0 && s[len(s)-1] == '/' {
+		return s[:len(s)-1]
+	}
+	return s
+}
+
+func AppendSlash(s string) string {
+	if len(s) > 0 && s[len(s)-1] != '/' {
+		return s + "/"
+	}
+	return s
+}
