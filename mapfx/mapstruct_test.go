@@ -31,11 +31,13 @@ func TestStruct(t *testing.T) {
 		status: false,
 	})
 
-	aa, _ := a.LoadForUpdate("test1")
+	aa, _ := a.Load("test1")
 	aa.count = 7
 	aa.status = true
+	bb, _ := a.Load("test1")
+	println(fmt.Sprintf("%+v", bb))
 
-	err := a.ForEach(func(key string, value *aaa) bool {
+	err := a.ForEachReadOnly(func(key string, value *aaa) bool {
 		println(key, fmt.Sprintf("--- %+v", value))
 
 		return true

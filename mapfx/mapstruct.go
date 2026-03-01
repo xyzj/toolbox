@@ -3,6 +3,7 @@ package mapfx
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 
@@ -21,16 +22,21 @@ import (
 
 // NewStructMap 返回一个线程安全的基于基本数据类型的map,key为int,int64,uint64,string,value为struct
 func NewStructMap[KEY comparable, VALUE any]() *StructMap[KEY, VALUE] {
+	var zero KEY
+	keyType := reflect.TypeOf(zero)
+	keyIsString := keyType != nil && keyType.Kind() == reflect.String
 	return &StructMap[KEY, VALUE]{
-		locker: sync.RWMutex{},
-		data:   make(map[KEY]*VALUE),
+		locker:      sync.RWMutex{},
+		data:        make(map[KEY]*VALUE),
+		keyIsString: keyIsString,
 	}
 }
 
 // StructMap 泛型map 对应各种slice类型
 type StructMap[KEY comparable, VALUE any] struct {
-	locker sync.RWMutex
-	data   map[KEY]*VALUE
+	locker      sync.RWMutex
+	data        map[KEY]*VALUE
+	keyIsString bool
 }
 
 // Store 添加内容
@@ -59,10 +65,10 @@ func (m *StructMap[KEY, VALUE]) DeleteMore(keys ...KEY) {
 // Clear 清空内容
 func (m *StructMap[KEY, VALUE]) Clear() {
 	m.locker.Lock()
-	for k := range m.data {
-		delete(m.data, k)
-	}
-	// m.data = make(map[KEY]*VALUE)
+	// for k := range m.data {
+	// 	delete(m.data, k)
+	// }
+	m.data = make(map[KEY]*VALUE)
 	m.locker.Unlock()
 }
 
@@ -94,15 +100,22 @@ func (m *StructMap[KEY, VALUE]) Load(key KEY) (*VALUE, bool) {
 func (m *StructMap[KEY, VALUE]) LoadMore(keys ...KEY) (map[KEY]*VALUE, bool) {
 	m.locker.RLock()
 	defer m.locker.RUnlock()
-	vs := make(map[KEY]*VALUE)
-	for _, key := range keys {
+
+	l := len(keys)
+	x := make(map[KEY]*VALUE, l)
+	if l == 0 {
+		return x, false
+	}
+
+	copies := make([]VALUE, l)
+	for i, key := range keys {
 		v, ok := m.data[key]
 		if ok {
-			z := *v
-			vs[key] = &z
+			copies[i] = *v
+			x[key] = &copies[i]
 		}
 	}
-	return vs, len(vs) > 0
+	return x, len(x) > 0
 }
 
 // LoadForUpdate 浅拷贝一个值
@@ -133,11 +146,14 @@ func (m *StructMap[KEY, VALUE]) HasPrefix(key string) bool {
 	if key == "" {
 		return false
 	}
+	if !m.keyIsString {
+		return false
+	}
 	m.locker.RLock()
 	defer m.locker.RUnlock()
 	ok := false
 	for k := range m.data {
-		if strings.HasPrefix(fmt.Sprintf("%v", k), key) {
+		if strings.HasPrefix(reflect.ValueOf(k).String(), key) {
 			ok = true
 			break
 		}
@@ -149,10 +165,21 @@ func (m *StructMap[KEY, VALUE]) HasPrefix(key string) bool {
 func (m *StructMap[KEY, VALUE]) Clone() map[KEY]*VALUE {
 	m.locker.RLock()
 	defer m.locker.RUnlock()
-	x := make(map[KEY]*VALUE)
+
+	l := len(m.data)
+	x := make(map[KEY]*VALUE, l)
+	if l == 0 {
+		return x
+	}
+
+	// 核心优化：一次性分配所有 VALUE 的内存空间
+	// 这将 N 次 heap alloc 减少为 1 次，显著降低 GC 压力
+	copies := make([]VALUE, l)
+	i := 0
 	for k, v := range m.data {
-		z := *v
-		x[k] = &z
+		copies[i] = *v    // 结构体值复制
+		x[k] = &copies[i] // 指向切片内部地址
+		i++
 	}
 
 	return x
@@ -177,10 +204,10 @@ func (m *StructMap[KEY, VALUE]) ForEach(f func(key KEY, value *VALUE) bool) (err
 	return err
 }
 
-// ForEachWithRLocker 遍历map的key和value
+// ForEachReadOnly 遍历map的key和value
 //
 //	使用rlocker进行便利，遍历过程中不应该进行读写
-func (m *StructMap[KEY, VALUE]) ForEachWithRLocker(f func(key KEY, value *VALUE) bool) (err error) {
+func (m *StructMap[KEY, VALUE]) ForEachReadOnly(f func(key KEY, value *VALUE) bool) (err error) {
 	m.locker.RLock()
 	defer func() {
 		if ex := recover(); ex != nil {
@@ -201,5 +228,5 @@ func (m *StructMap[KEY, VALUE]) ForEachWithRLocker(f func(key KEY, value *VALUE)
 func (m *StructMap[KEY, VALUE]) Keys() []KEY {
 	m.locker.RLock()
 	defer m.locker.RUnlock()
-	return Keys[KEY](m.data)
+	return Keys(m.data)
 }

@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"hash/crc32"
+	"maps"
 	"strconv"
 	"strings"
 	"time"
@@ -15,56 +16,41 @@ import (
 
 const defaultBatchSize = 500
 
-type redisOpt struct {
-	tls   *tls.Config
-	addr  string
-	user  string
-	pwd   string
-	dbcnt int
-}
-type RedisOptions func(opt *redisOpt)
-
-var defaultRedisOpt = redisOpt{
-	addr:  "127.0.0.1:6379",
-	user:  "",
-	pwd:   "",
-	dbcnt: 0,
-	tls:   &tls.Config{InsecureSkipVerify: true},
-}
+type RedisOptions func(opt *redis.Options)
 
 // WithRedisAddr sets the redis address.
 func WithRedisAddr(s string) RedisOptions {
-	return func(o *redisOpt) {
-		o.addr = s
+	return func(o *redis.Options) {
+		o.Addr = s
 	}
 }
 
 // WithRedisUser sets the redis username.
 func WithRedisUser(s string) RedisOptions {
-	return func(o *redisOpt) {
-		o.user = s
+	return func(o *redis.Options) {
+		o.Username = s
 	}
 }
 
 // WithRedisPwd sets the redis password.
 func WithRedisPwd(s string) RedisOptions {
-	return func(o *redisOpt) {
-		o.pwd = s
+	return func(o *redis.Options) {
+		o.Password = s
 	}
 }
 
 // WithRedisDB sets the redis database index.
 func WithRedisDB(n int) RedisOptions {
-	return func(o *redisOpt) {
-		o.dbcnt = n
+	return func(o *redis.Options) {
+		o.DB = n
 	}
 }
 
 // WithRedisTLS sets the TLS config for redis.
 func WithRedisTLS(t *tls.Config) RedisOptions {
-	return func(o *redisOpt) {
+	return func(o *redis.Options) {
 		if t != nil {
-			o.tls = t
+			o.TLSConfig = t
 		}
 	}
 }
@@ -92,20 +78,13 @@ func (rdb *RedisCli) MainVer() int {
 	return rdb.mainver
 }
 
-// todo: may be next version
 // NewRedisClient creates a redis client with options.
 func NewRedisClient(opts ...RedisOptions) *RedisCli {
-	opt := defaultRedisOpt
+	opt := redis.Options{}
 	for _, o := range opts {
 		o(&opt)
 	}
-	rdb := redis.NewClient(&redis.Options{
-		Addr:      opt.addr,
-		Username:  opt.user,
-		Password:  opt.pwd,
-		DB:        opt.dbcnt,
-		TLSConfig: opt.tls,
-	})
+	rdb := redis.NewClient(&opt)
 	cli := &RedisCli{
 		cli: rdb,
 	}
@@ -240,7 +219,11 @@ func (s *RedisSharder) ScanAll(ctx context.Context, handler func(k, f, v string)
 	for i := uint32(0); i < s.numShards; i++ {
 		sk := fmt.Sprintf("%s:%d", s.baseKey, i)
 		// 使用 HSCAN 迭代每一个分片，避免阻塞
-		iter := s.client.HScan(ctx, sk, 0, "", defaultBatchSize).Iterator()
+		cmd := s.client.HScan(ctx, sk, 0, "", defaultBatchSize)
+		if cmd.Err() != nil {
+			return cmd.Err()
+		}
+		iter := cmd.Iterator()
 		for iter.Next(ctx) {
 			field := iter.Val()
 			if iter.Next(ctx) { // HScan 返回的是 field, value, field, value...
@@ -259,23 +242,21 @@ func (s *RedisSharder) ScanAll(ctx context.Context, handler func(k, f, v string)
 
 // GetAll returns all fields across all shards.
 func (s *RedisSharder) GetAll(ctx context.Context) (map[string]string, error) {
-	result := make(map[string]string)
+	result := make(map[string]string, s.numShards*100) // 预估容量，减少扩容次数
 	for i := uint32(0); i < s.numShards; i++ {
 		sk := fmt.Sprintf("%s:%d", s.baseKey, i)
 		data, err := s.client.HGetAll(ctx, sk).Result()
 		if err != nil && err != redis.Nil {
 			return nil, err
 		}
-		for k, v := range data {
-			result[k] = v
-		}
+		maps.Copy(result, data)
 	}
 	return result, nil
 }
 
 // GetByPrefix returns all fields with the given prefix.
 func (s *RedisSharder) GetByPrefix(ctx context.Context, prefix string) (map[string]string, error) {
-	result := make(map[string]string)
+	result := make(map[string]string, s.numShards*100) // 预估容量，减少扩容次数
 	err := s.ScanAll(ctx, func(key, field, value string) bool {
 		if len(field) >= len(prefix) && field[:len(prefix)] == prefix {
 			result[field] = value
@@ -287,7 +268,7 @@ func (s *RedisSharder) GetByPrefix(ctx context.Context, prefix string) (map[stri
 
 // GetBySuffix returns all fields with the given suffix.
 func (s *RedisSharder) GetBySuffix(ctx context.Context, suffix string) (map[string]string, error) {
-	result := make(map[string]string)
+	result := make(map[string]string, s.numShards*100) // 预估容量，减少扩容次数
 	err := s.ScanAll(ctx, func(key, field, value string) bool {
 		if len(field) >= len(suffix) && field[len(field)-len(suffix):] == suffix {
 			result[field] = value
@@ -317,7 +298,7 @@ func (s *RedisSharder) Delete(ctx context.Context, fields ...string) error {
 		return nil
 	}
 	// 1. 将字段按分片 Key 进行预归类
-	groupedFields := make(map[string][]string)
+	groupedFields := make(map[string][]string, len(fields))
 	for _, f := range fields {
 		sk := s.getShardKey(f)
 		groupedFields[sk] = append(groupedFields[sk], f)
@@ -362,7 +343,11 @@ func (s *RedisSharder) DeleteBySuffix(ctx context.Context, suffix string) error 
 	for i := uint32(0); i < s.numShards; i++ {
 		sk := fmt.Sprintf("%s:%d", s.baseKey, i)
 		// 使用 HSCAN 迭代每一个分片，避免阻塞
-		iter := s.client.HScan(ctx, sk, 0, "*"+suffix, defaultBatchSize).Iterator()
+		cmd := s.client.HScan(ctx, sk, 0, "*"+suffix, defaultBatchSize)
+		if cmd.Err() != nil {
+			return cmd.Err()
+		}
+		iter := cmd.Iterator()
 		var fieldsToDelete []string
 		for iter.Next(ctx) {
 			field := iter.Val()
@@ -391,7 +376,11 @@ func (s *RedisSharder) DeleteByPrefix(ctx context.Context, prefix string) error 
 	for i := uint32(0); i < s.numShards; i++ {
 		sk := fmt.Sprintf("%s:%d", s.baseKey, i)
 		// 使用 HSCAN 迭代每一个分片，避免阻塞
-		iter := s.client.HScan(ctx, sk, 0, prefix+"*", defaultBatchSize).Iterator()
+		cmd := s.client.HScan(ctx, sk, 0, prefix+"*", defaultBatchSize)
+		if cmd.Err() != nil {
+			return cmd.Err()
+		}
+		iter := cmd.Iterator()
 		var fieldsToDelete []string
 		for iter.Next(ctx) {
 			field := iter.Val()

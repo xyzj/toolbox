@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/xyzj/toolbox/json"
@@ -35,11 +34,12 @@ type Writer struct {
 	fno         *os.File
 	ctxClose    context.Context
 	ctxCancel   context.CancelFunc
-	currentSize atomic.Int64
 	locker      sync.Mutex
-	closed      atomic.Bool
-	n           int
 	err         error
+	currentSize int64
+	n           int
+	closed      bool
+	stdOut      bool
 }
 
 func (w *Writer) formatdata(data []byte) *[]byte {
@@ -105,7 +105,7 @@ func (w *Writer) openfile(trunc bool) error {
 	if w.cnf.filename == "" {
 		return errors.New("filename not specified")
 	}
-	w.currentSize.Store(0)
+	w.currentSize = 0
 	var err error
 	flags := os.O_CREATE | os.O_APPEND | os.O_WRONLY
 	if trunc {
@@ -120,7 +120,7 @@ func (w *Writer) openfile(trunc bool) error {
 	}
 	info, err := w.fno.Stat()
 	if err == nil {
-		w.currentSize.Store(info.Size())
+		w.currentSize = info.Size()
 	}
 	w.buff.Reset(w.fno)
 	return nil
@@ -130,7 +130,7 @@ func (w *Writer) openfile(trunc bool) error {
 func (w *Writer) Close() error {
 	w.locker.Lock()
 	defer w.locker.Unlock()
-	w.closed.Store(true)
+	w.closed = true
 	if w.cnf.filename == "" {
 		return nil
 	}
@@ -146,23 +146,23 @@ func (w *Writer) Close() error {
 
 // Write writes the given byte slice to the log writer.
 func (w *Writer) Write(b []byte) (n int, err error) {
-	if w.closed.Load() {
-		return 0, nil
-	}
 	if len(b) == 0 {
 		return 0, nil
 	}
-	if w.fno == nil {
-		return 0, errors.New("log file not opened")
-	}
-	if w.cnf.filename == "" { // console writer
+	if w.stdOut { // console writer
 		return w.fno.Write(*w.formatdata(b))
+	}
+	if w.closed {
+		return 0, nil
 	}
 	w.locker.Lock()
 	defer w.locker.Unlock()
+	if w.fno == nil {
+		return 0, errors.New("log file not opened")
+	}
 	w.n, w.err = w.buff.Write(*w.formatdata(b))
 	if w.n > 0 && w.cnf.maxsize > 0 {
-		w.currentSize.Add(int64(w.n))
+		w.currentSize += int64(w.n)
 	}
 	return w.n, w.err
 }
@@ -178,9 +178,9 @@ func NewWriter(opts ...writerOpts) io.Writer {
 	}
 	w := &Writer{
 		cnf:         opt,
-		currentSize: atomic.Int64{},
+		currentSize: 0,
 		locker:      sync.Mutex{},
-		closed:      atomic.Bool{},
+		closed:      false,
 		buff:        bufio.NewWriterSize(io.Discard, opt.bufferSize),
 	}
 	var err error
@@ -202,7 +202,7 @@ func NewWriter(opts ...writerOpts) io.Writer {
 				if n := w.buff.Buffered(); n > 0 {
 					w.buff.Flush()
 				}
-				if w.cnf.maxsize > 0 && w.currentSize.Load() >= w.cnf.maxsize {
+				if w.cnf.maxsize > 0 && w.currentSize >= w.cnf.maxsize {
 					if w.fno != nil {
 						w.fno.Close()
 					}
@@ -234,8 +234,9 @@ func NewConsoleWriter() io.Writer {
 	return &Writer{
 		fno:         os.Stdout,
 		cnf:         o,
-		currentSize: atomic.Int64{},
+		currentSize: 0,
 		locker:      sync.Mutex{},
-		closed:      atomic.Bool{},
+		closed:      false,
+		stdOut:      true,
 	}
 }

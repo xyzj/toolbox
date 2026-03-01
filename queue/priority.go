@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -74,8 +73,8 @@ type PriorityQueue[T any] struct {
 	mutex     sync.RWMutex
 	cond      *sync.Cond // 用于阻塞/唤醒 Get 操作
 	maxLength int
-	closed    atomic.Bool // 追踪队列是否已关闭
 	zero      T
+	closed    bool // 追踪队列是否已关闭
 }
 
 // NewPriorityQueue 构造函数
@@ -94,7 +93,7 @@ func NewPriorityQueue[T any](maxLength int) *PriorityQueue[T] {
 func (pq *PriorityQueue[T]) Put(priority Priority, payload T) error {
 	pq.mutex.Lock()
 	defer pq.mutex.Unlock()
-	if pq.closed.Load() { // 检查是否已关闭
+	if pq.closed { // 检查是否已关闭
 		return ErrClosed
 	}
 	if pq.heap.Len() >= pq.maxLength {
@@ -125,7 +124,7 @@ func (pq *PriorityQueue[T]) GetWithContext(ctx context.Context) (T, error) {
 	pq.mutex.Lock()
 	defer pq.mutex.Unlock()
 
-	if pq.closed.Load() {
+	if pq.closed {
 		return pq.zero, ErrClosed
 	}
 
@@ -143,7 +142,7 @@ func (pq *PriorityQueue[T]) GetWithContext(ctx context.Context) (T, error) {
 			return heap.Pop(pq.heap).(*messageItem[T]).Payload, nil
 		}
 		// 队列已关闭
-		if pq.closed.Load() {
+		if pq.closed {
 			return pq.zero, ErrClosed
 		}
 		// 上下文已取消/超时
@@ -170,11 +169,11 @@ func (pq *PriorityQueue[T]) Close() {
 	pq.mutex.Lock()
 	defer pq.mutex.Unlock()
 	// 确保只关闭一次
-	if pq.closed.Load() {
+	if pq.closed {
 		return
 	}
 
-	pq.closed.Store(true)
+	pq.closed = true
 	// 清理队列内容（可选，但通常在关闭时执行）
 	pq.heap = &priorityHeap[T]{}
 	heap.Init(pq.heap)
@@ -186,7 +185,7 @@ func (pq *PriorityQueue[T]) Close() {
 // It returns true if the internal closed flag is set, false otherwise.
 // The check is performed atomically and is safe for concurrent use.
 func (pq *PriorityQueue[T]) IsClosed() bool {
-	return pq.closed.Load()
+	return pq.closed
 }
 
 // Open marks the priority queue as open (not closed).
@@ -195,12 +194,12 @@ func (pq *PriorityQueue[T]) IsClosed() bool {
 // only acquires the mutex when the queue appears closed, then sets the flag to false.
 // This method is safe for concurrent use and ensures the queue's closed state is cleared.
 func (pq *PriorityQueue[T]) Open() {
-	if !pq.closed.Load() {
-		return
-	}
 	pq.mutex.Lock()
 	defer pq.mutex.Unlock()
-	pq.closed.Store(false)
+	if !pq.closed {
+		return
+	}
+	pq.closed = false
 }
 
 // Reset reinitializes the priority queue to an empty state.
@@ -208,11 +207,11 @@ func (pq *PriorityQueue[T]) Open() {
 // Reset acquires the queue's mutex, replaces the internal heap with a fresh empty heap,
 // and calls heap.Init on the new heap. On success it returns nil.
 func (pq *PriorityQueue[T]) Reset() error {
-	if !pq.closed.Load() {
-		return ErrClosed
-	}
 	pq.mutex.Lock()
 	defer pq.mutex.Unlock()
+	if pq.closed {
+		return ErrClosed
+	}
 	pq.heap = &priorityHeap[T]{}
 	heap.Init(pq.heap)
 	return nil
