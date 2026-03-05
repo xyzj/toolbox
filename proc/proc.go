@@ -2,12 +2,14 @@
 package proc
 
 import (
+	"bufio"
 	"bytes"
 	_ "embed"
 	"fmt"
 	"net/http"
 	"os"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -18,9 +20,7 @@ import (
 	"github.com/shirou/gopsutil/net"
 	"github.com/shirou/gopsutil/process"
 	"github.com/tidwall/sjson"
-	"github.com/xyzj/deepcopy"
 	"github.com/xyzj/toolbox"
-	"github.com/xyzj/toolbox/cache"
 	"github.com/xyzj/toolbox/json"
 	"github.com/xyzj/toolbox/logger"
 	"github.com/xyzj/toolbox/loopfunc"
@@ -56,7 +56,6 @@ func (ps *procStatus) JSON() string {
 	if err != nil {
 		return ""
 	}
-	// js, _ = sjson.Set(js, "dt", toolbox.Stamp2Time(ps.Dt))
 	return js
 }
 
@@ -65,23 +64,92 @@ type RecordOpt struct {
 	Timer       time.Duration
 	DataTimeout time.Duration
 	Name        string
+	SaveFile    string
 }
 type Recorder struct {
-	lastProc  *procStatus
-	procCache *cache.Ring[*procStatus]
-	opt       *RecordOpt
+	buffer   []*procStatus
+	opt      *RecordOpt
+	locker   sync.Mutex
+	filename string
 }
 
 func (r *Recorder) LastHTML() string {
-	return r.lastProc.HTML()
+	if len(r.buffer) == 0 {
+		return ""
+	}
+	return r.buffer[len(r.buffer)-1].HTML()
 }
 
 func (r *Recorder) LastJSON() string {
-	return r.lastProc.JSON()
+	if len(r.buffer) == 0 {
+		return ""
+	}
+	return r.buffer[len(r.buffer)-1].JSON()
 }
 
 func (r *Recorder) LastString() string {
-	return r.lastProc.String()
+	if len(r.buffer) == 0 {
+		return ""
+	}
+	return r.buffer[len(r.buffer)-1].String()
+}
+
+// flushToFile 将缓冲区数据追加到文件
+func (r *Recorder) flushToFile() {
+	f, err := os.OpenFile(r.filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	for _, v := range r.buffer {
+		line, _ := json.Marshal(v)
+		f.Write(append(line, '\n'))
+	}
+	r.buffer = r.buffer[:0]
+}
+
+// maintenance 精确清理过期数据
+func (r *Recorder) maintenance() {
+	r.locker.Lock()
+
+	// 先把缓冲区剩下的写进去
+	r.flushToFile()
+	r.locker.Unlock()
+
+	oldFile, err := os.Open(r.filename)
+	if err != nil {
+		return
+	}
+
+	tmpPath := r.filename + ".tmp"
+	newFile, err := os.Create(tmpPath)
+	if err != nil {
+		oldFile.Close()
+		return
+	}
+
+	now := time.Now().Unix()
+	limit := int64(r.opt.DataTimeout.Seconds())
+
+	scanner := bufio.NewScanner(oldFile)
+	var ps procStatus
+	for scanner.Scan() {
+		if err := json.Unmarshal(scanner.Bytes(), &ps); err == nil {
+			// 精确比对：保留未过期的数据
+			if now-ps.Dt <= limit {
+				newFile.Write(append(scanner.Bytes(), '\n'))
+			}
+		}
+	}
+	// 3. 核心修正：在 Rename 之前必须先关闭所有句柄
+	oldFile.Close()
+	newFile.Close()
+
+	// 4. 加锁替换文件
+	r.locker.Lock()
+	os.Rename(tmpPath, r.filename)
+	r.locker.Unlock()
 }
 
 // StartRecord 记录进程状态
@@ -101,12 +169,16 @@ func StartRecord(opt *RecordOpt) *Recorder {
 	if opt.DataTimeout > time.Hour*24*366 {
 		opt.DataTimeout = time.Hour * 24 * 366
 	}
-	r := &Recorder{
-		opt:       opt,
-		lastProc:  &procStatus{},
-		procCache: cache.NewRing[*procStatus](int(opt.DataTimeout.Seconds() / opt.Timer.Seconds())),
+	if opt.SaveFile == "" {
+		opt.SaveFile = "proc_records.process"
 	}
-	go loopfunc.LoopFunc(func(params ...interface{}) {
+	r := &Recorder{
+		locker:   sync.Mutex{},
+		opt:      opt,
+		buffer:   make([]*procStatus, 0, 20),
+		filename: opt.SaveFile,
+	}
+	go loopfunc.LoopFunc(func(params ...any) {
 		var proce *process.Process
 		var err error
 		var memi *process.MemoryInfoStat
@@ -122,73 +194,115 @@ func StartRecord(opt *RecordOpt) *Recorder {
 				}
 			}
 			cp, _ = proce.CPUPercent()
-			r.lastProc.Cpup = float32(cp)
-			r.lastProc.Ofd, _ = proce.NumFDs()
-			r.lastProc.Memp, _ = proce.MemoryPercent()
+			p := &procStatus{}
+			p.Cpup = float32(cp)
+			p.Ofd, _ = proce.NumFDs()
+			p.Memp, _ = proce.MemoryPercent()
 			memi, _ = proce.MemoryInfo()
 			if memi == nil {
 				memi = &process.MemoryInfoStat{}
 			}
-			r.lastProc.Memrss = memi.RSS
-			r.lastProc.Memvms = memi.VMS
+			p.Memrss = memi.RSS
+			p.Memvms = memi.VMS
 			iost, _ = proce.IOCounters()
 			if iost == nil {
 				iost = &process.IOCountersStat{}
 			}
-			r.lastProc.IORead = iost.ReadBytes
-			r.lastProc.IOWrite = iost.WriteBytes
+			p.IORead = iost.ReadBytes
+			p.IOWrite = iost.WriteBytes
 			connst, _ = proce.Connections()
-			r.lastProc.Conns = int32(len(connst))
-			r.lastProc.Dt = time.Now().Unix()
-			r.procCache.Store(deepcopy.CopyAny(r.lastProc))
+			p.Conns = int32(len(connst))
+			p.Dt = time.Now().Unix()
+			// 1. 存入缓冲区
+			r.locker.Lock()
+			r.buffer = append(r.buffer, p)
+
+			// 2. 缓冲区满 10 条或达到某种条件写入文件
+			if len(r.buffer) >= 20 {
+				r.flushToFile()
+			}
+			r.locker.Unlock()
 		}
 
 		t := time.NewTimer(r.opt.Timer)
+		tl := max(time.Hour, r.opt.Timer*2)
+		tsave := time.NewTimer(tl)
 		c := 0
-		for range t.C {
-			f()
-			c++
-			if c%30 == 0 {
-				c = 0
-				opt.Logg.Info("[PROC] " + r.lastProc.String())
+		for {
+			select {
+			case <-t.C:
+				f()
+				c++
+				if c%30 == 0 {
+					c = 0
+					opt.Logg.Info("[PROC] " + r.LastString())
+				}
+				t.Reset(r.opt.Timer)
+			case <-tsave.C:
+				go r.maintenance()
+				tsave.Reset(tl)
 			}
-			t.Reset(r.opt.Timer)
 		}
 	}, "proc", opt.Logg.DefaultWriter())
 	return r
 }
 
-func (r *Recorder) Import(s []byte) error {
-	d := []*procStatus{}
-	err := json.Unmarshal(s, &d)
-	if err != nil {
-		return err
-	}
-	for _, v := range d {
-		if v == nil || v.Dt == 0 {
-			continue
-		}
-		r.procCache.Store(v)
-	}
-	return nil
-}
-
 func (r *Recorder) Export() []byte {
-	s, err := r.procCache.MarshalJSON()
+	ps := r.allData()
+	jsonData, err := json.Marshal(ps)
 	if err != nil {
 		return []byte{}
 	}
-	return s
+	return jsonData
 }
 
 // allData 返回所有数据
 func (r *Recorder) allData() []*procStatus {
-	js := make([]*procStatus, 0, r.procCache.Len())
-	js = append(js, r.procCache.Slice()...)
-	sort.Slice(js, func(i, j int) bool {
-		return js[i].Dt < js[j].Dt
+	r.locker.Lock()
+	r.flushToFile() // 确保当前内存中的数据也进入读取范围
+	r.locker.Unlock()
+
+	data := make([]*procStatus, 0)
+	f, err := os.Open(r.filename)
+	if err != nil {
+		return data
+	}
+	defer f.Close()
+
+	// 1. 先快速估算行数或获取文件大小
+	// 如果文件很大，我们采用采样读取
+	fi, _ := f.Stat()
+	fileSize := fi.Size()
+
+	// 假设每行 JSON 大约 200 字节，如果超过 2000 行则开启采样
+	// 200 * 2000 = 400,000 字节 (~400KB)
+	step := 1
+	if fileSize > 400000 {
+		// 粗略计算步长，目标是让返回给前端的点控制在 1000-2000 个左右
+		approxRows := fileSize / 200
+		step = max(int(approxRows/1500), 1)
+	}
+
+	scanner := bufio.NewScanner(f)
+	count := 0
+	for scanner.Scan() {
+		count++
+		// 采样逻辑：只处理符合步长的行
+		if step > 1 && count%step != 0 {
+			continue
+		}
+
+		var ps procStatus
+		if err := json.Unmarshal(scanner.Bytes(), &ps); err == nil {
+			data = append(data, &ps)
+		}
+	}
+
+	// 依然保持你原有的排序逻辑
+	sort.Slice(data, func(i, j int) bool {
+		return data[i].Dt < data[j].Dt
 	})
-	return js
+	return data
 }
 
 func (r *Recorder) BuildLines(width string, js []*procStatus) []byte {
