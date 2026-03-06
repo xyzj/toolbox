@@ -85,7 +85,7 @@ func (fd *FileData) AddSheet(sheetname string) (*xlsx.Sheet, error) {
 func (fd *FileData) AddRowInSheet(sheetname string, cells ...interface{}) error {
 	sheet, ok := fd.writeFile.Sheet[sheetname]
 	if !ok {
-		return fmt.Errorf("sheet " + sheetname + " not found")
+		return errSheetNotFound(sheetname)
 	}
 	row := sheet.AddRow()
 	row.SetHeight(15)

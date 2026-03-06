@@ -2,7 +2,6 @@ package logger
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -12,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/xyzj/toolbox/json"
 	"github.com/xyzj/toolbox/loopfunc"
 	"github.com/xyzj/toolbox/pathtool"
 )
@@ -40,19 +38,26 @@ type Writer struct {
 	n           int
 	closed      bool
 	stdOut      bool
+
+	cacheTimePrefixBySecond bool
+	timePrefixSecond        int64
+	timePrefixLen           int
+	timePrefixBuf           [96]byte
 }
 
-func (w *Writer) formatdata(data []byte) *[]byte {
-	xp := make([]byte, 0, len(data)+len(w.cnf.timeformat)+1)
-	if w.cnf.timeformat != "" {
-		xp = append(xp, json.Bytes(time.Now().Format(w.cnf.timeformat))...)
+func canCacheTimePrefixBySecond(layout string) bool {
+	if layout == "" {
+		return false
 	}
-	xp = append(xp, data...)
-	if !bytes.HasSuffix(xp, lineEnd) {
-		xp = append(xp, lineEnd...)
+	if strings.Contains(layout, ".000") || strings.Contains(layout, ".999") {
+		return false
 	}
-	return &xp
+	if strings.Contains(layout, ",000") || strings.Contains(layout, ",999") {
+		return false
+	}
+	return true
 }
+
 func (w *Writer) compressAndClean(oldfile string) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -149,8 +154,34 @@ func (w *Writer) Write(b []byte) (n int, err error) {
 	if len(b) == 0 {
 		return 0, nil
 	}
+
 	if w.stdOut { // console writer
-		return w.fno.Write(*w.formatdata(b))
+		total := 0
+		if w.cnf.timeformat != "" {
+			var tbuf [96]byte
+			timePrefix := time.Now().AppendFormat(tbuf[:0], w.cnf.timeformat)
+			x, e := w.fno.Write(timePrefix)
+			total += x
+			if e != nil {
+				return total, e
+			}
+		}
+
+		x, e := w.fno.Write(b)
+		total += x
+		if e != nil {
+			return total, e
+		}
+
+		if b[len(b)-1] != lineEndByte {
+			x, e = w.fno.Write(lineEnd)
+			total += x
+			if e != nil {
+				return total, e
+			}
+		}
+
+		return total, nil
 	}
 	if w.closed {
 		return 0, nil
@@ -160,7 +191,50 @@ func (w *Writer) Write(b []byte) (n int, err error) {
 	if w.fno == nil {
 		return 0, errors.New("log file not opened")
 	}
-	w.n, w.err = w.buff.Write(*w.formatdata(b))
+	total := 0
+	if w.cnf.timeformat != "" {
+		now := time.Now()
+		if w.cacheTimePrefixBySecond {
+			sec := now.Unix()
+			if w.timePrefixLen == 0 || sec != w.timePrefixSecond {
+				w.timePrefixLen = len(now.AppendFormat(w.timePrefixBuf[:0], w.cnf.timeformat))
+				w.timePrefixSecond = sec
+			}
+			x, e := w.buff.Write(w.timePrefixBuf[:w.timePrefixLen])
+			total += x
+			if e != nil {
+				w.n, w.err = total, e
+				return w.n, w.err
+			}
+		} else {
+			var tbuf [96]byte
+			timePrefix := now.AppendFormat(tbuf[:0], w.cnf.timeformat)
+			x, e := w.buff.Write(timePrefix)
+			total += x
+			if e != nil {
+				w.n, w.err = total, e
+				return w.n, w.err
+			}
+		}
+	}
+
+	x, e := w.buff.Write(b)
+	total += x
+	if e != nil {
+		w.n, w.err = total, e
+		return w.n, w.err
+	}
+
+	if b[len(b)-1] != lineEndByte {
+		e = w.buff.WriteByte(lineEndByte)
+		if e != nil {
+			w.n, w.err = total, e
+			return w.n, w.err
+		}
+		total++
+	}
+
+	w.n, w.err = total, nil
 	if w.n > 0 && w.cnf.maxsize > 0 {
 		w.currentSize += int64(w.n)
 	}
@@ -177,11 +251,12 @@ func NewWriter(opts ...writerOpts) io.Writer {
 		return NewConsoleWriter()
 	}
 	w := &Writer{
-		cnf:         opt,
-		currentSize: 0,
-		locker:      sync.Mutex{},
-		closed:      false,
-		buff:        bufio.NewWriterSize(io.Discard, opt.bufferSize),
+		cnf:                     opt,
+		currentSize:             0,
+		locker:                  sync.Mutex{},
+		closed:                  false,
+		buff:                    bufio.NewWriterSize(io.Discard, opt.bufferSize),
+		cacheTimePrefixBySecond: canCacheTimePrefixBySecond(opt.timeformat),
 	}
 	var err error
 	if err = w.openfile(false); err != nil {
@@ -232,11 +307,12 @@ func NewWriter(opts ...writerOpts) io.Writer {
 func NewConsoleWriter() io.Writer {
 	o := defaultWriterOpts()
 	return &Writer{
-		fno:         os.Stdout,
-		cnf:         o,
-		currentSize: 0,
-		locker:      sync.Mutex{},
-		closed:      false,
-		stdOut:      true,
+		fno:                     os.Stdout,
+		cnf:                     o,
+		currentSize:             0,
+		locker:                  sync.Mutex{},
+		closed:                  false,
+		stdOut:                  true,
+		cacheTimePrefixBySecond: canCacheTimePrefixBySecond(o.timeformat),
 	}
 }

@@ -128,6 +128,7 @@ func (r *Recorder) maintenance() {
 		oldFile.Close()
 		return
 	}
+	writer := bufio.NewWriter(newFile)
 
 	now := time.Now().Unix()
 	limit := int64(r.opt.DataTimeout.Seconds())
@@ -138,10 +139,12 @@ func (r *Recorder) maintenance() {
 		if err := json.Unmarshal(scanner.Bytes(), &ps); err == nil {
 			// 精确比对：保留未过期的数据
 			if now-ps.Dt <= limit {
-				newFile.Write(append(scanner.Bytes(), '\n'))
+				_, _ = writer.Write(scanner.Bytes())
+				_ = writer.WriteByte('\n')
 			}
 		}
 	}
+	_ = writer.Flush()
 	// 3. 核心修正：在 Rename 之前必须先关闭所有句柄
 	oldFile.Close()
 	newFile.Close()

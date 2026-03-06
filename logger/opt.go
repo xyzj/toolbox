@@ -12,9 +12,10 @@ const (
 	fileTimeFormat  = "Jan02.1504"          // 日志文件命名格式
 	ShortTimeFormat = "15:04:05.000 "       // ShortTimeFormat 日志事件戳格式
 	LongTimeFormat  = "Jan02 15:04:05.000 " // 2006-01-02 15:04:05.000 "
+	lineEndByte     = byte(10)              // 换行符
 )
 
-var lineEnd = []byte{10}
+var lineEnd = []byte{lineEndByte} // 换行符
 
 type writerOpt struct {
 	compress     pathtool.CompressMethod // compress 压缩方式， none-不压缩, snappy-snappy压缩, zstd-zstd压缩, gzip-gzip压缩
