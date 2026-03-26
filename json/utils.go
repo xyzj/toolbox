@@ -9,12 +9,18 @@ import (
 
 // Bytes 内存地址转换string
 func Bytes(s string) []byte {
-	return *(*[]byte)(unsafe.Pointer(&s))
+	if len(s) == 0 {
+		return []byte{}
+	}
+	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
 
 // String 内存地址转换[]byte
 func String(b []byte) string {
-	return *(*string)(unsafe.Pointer(&b))
+	if len(b) == 0 {
+		return ""
+	}
+	return unsafe.String(unsafe.SliceData(b), len(b))
 }
 
 // PB2Json pb2格式转换为json []byte格式

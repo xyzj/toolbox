@@ -60,6 +60,15 @@ func (cd *cacheData[T]) clone() map[string]*cData[T] {
 	}
 	return cloneData
 }
+func (cd *cacheData[T]) isExpire(key string) bool {
+	cd.locker.Lock()
+	defer cd.locker.Unlock()
+	if v, ok := cd.data[key]; !ok {
+		return false
+	} else {
+		return v.expire.Before(time.Now())
+	}
+}
 func (cd *cacheData[T]) expire(key string, expire time.Time) bool {
 	cd.locker.Lock()
 	defer cd.locker.Unlock()
@@ -264,7 +273,7 @@ func (ac *AnyCache[T]) StoreWithExpire(key string, value T, expire time.Duration
 	if ac.closed {
 		return fmt.Errorf("cache is closed")
 	}
-	if !ac.cache.expire(key, time.Now().Add(expire)) {
+	if !ac.cache.isExpire(key) {
 		ac.cache.store(key, value, time.Now().Add(expire))
 	}
 	return nil
