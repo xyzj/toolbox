@@ -9,15 +9,13 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/xyzj/toolbox/crypto"
+	"github.com/xyzj/toolbox/compressor"
 	json "github.com/xyzj/toolbox/json"
 	"github.com/xyzj/toolbox/logger"
 )
 
 var (
 	hc = New()
-
-	codeZstd = crypto.NewCompressor(crypto.CompressZstd)
 )
 
 func DoRequestWithTimeout(req *http.Request, timeout time.Duration) (int, []byte, map[string]string, error) {
@@ -257,7 +255,7 @@ func (c *Client) DoRequest(req *http.Request, opts ...ReqOptions) (int, []byte, 
 		h[k] = resp.Header.Get(k)
 	}
 	if len(b) > 0 && h[HEADER_COMPRESSED] == HEADER_VALUE_ZSTD {
-		ub, err := codeZstd.Decode(b)
+		ub, err := compressor.Decompress(compressor.Zstd, b)
 		if err == nil {
 			b = ub
 		}

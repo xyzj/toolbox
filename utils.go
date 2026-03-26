@@ -23,6 +23,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/xyzj/toolbox/compressor"
 	"github.com/xyzj/toolbox/crypto"
 	json "github.com/xyzj/toolbox/json"
 	"github.com/xyzj/toolbox/pathtool"
@@ -362,8 +363,9 @@ func DecodeStringOld(s string) string {
 				ns.WriteByte(byte(int(z[i]) + 256 - int(x)))
 			}
 		}
-		zlibCompress := crypto.NewCompressor(crypto.CompressZlib)
-		b, err := zlibCompress.Decode(ns.Bytes())
+		// zlibCompress := crypto.NewCompressor(crypto.CompressZlib)
+		// b, err := zlibCompress.Decode(ns.Bytes())
+		b, err := compressor.Decompress(compressor.Zlib, ns.Bytes())
 		if err != nil {
 			return ""
 		}
