@@ -147,7 +147,16 @@ func (w *AES) Decode(b []byte) (string, error) {
 
 // DecodeBase64 aes解密base64编码的字符串
 func (w *AES) DecodeBase64(s string) (string, error) {
-	b, err := base64.StdEncoding.DecodeString(FillBase64(s))
+	b, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		return "", err
+	}
+	return w.Decode(b)
+}
+
+// DecodeURLBase64 aes解密URLbase64编码的字符串
+func (w *AES) DecodeURLBase64(s string) (string, error) {
+	b, err := base64.URLEncoding.DecodeString(s)
 	if err != nil {
 		return "", err
 	}

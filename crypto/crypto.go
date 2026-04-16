@@ -11,7 +11,6 @@ import (
 	"io"
 	mrand "math/rand"
 	"os"
-	"strings"
 
 	"github.com/xyzj/deepcopy"
 	"github.com/xyzj/toolbox/json"
@@ -37,19 +36,24 @@ func (v CValue) HexString() string {
 	return hex.EncodeToString(v)
 }
 
-// Base64String 加密结果以标准base64字符串形式输出
+// Base64String 加密结果以标准base64字符串形式输出,可能含有`=`
 func (v CValue) Base64String() string {
 	return base64.StdEncoding.EncodeToString(v)
 }
 
-// Base64StringNoTail 加密结果以标准base64字符串形式输出，去除`=`
-func (v CValue) Base64StringNoTail() string {
-	return strings.ReplaceAll(base64.StdEncoding.EncodeToString(v), "=", "")
+// Base64StringNoPadding 加密结果以标准base64字符串形式输出，去除`=`
+func (v CValue) Base64StringNoPadding() string {
+	return base64.RawStdEncoding.EncodeToString(v)
 }
 
-// URLBase64String 加密结果以URLbase64字符串形式输出
+// URLBase64String 加密结果以URLbase64字符串形式输出,有`=`
 func (v CValue) URLBase64String() string {
 	return base64.URLEncoding.EncodeToString(v)
+}
+
+// URLBase64StringNoPadding 加密结果以URLbase64字符串形式输出,去除`=`
+func (v CValue) URLBase64StringNoPadding() string {
+	return base64.RawURLEncoding.EncodeToString(v)
 }
 
 var (
@@ -215,16 +219,15 @@ func ObfuscationString(s string) string {
 	y.Write(GetRandom(3))
 	zz := y.Bytes()
 	zz = json.ReverseBytes(zz)
-	a := base64.URLEncoding.EncodeToString(zz)
+	a := base64.RawURLEncoding.EncodeToString(zz)
 	a = json.ReverseString(a)
 	a = json.SwapCase(a)
-	a = strings.Replace(a, "=", "", -1)
 	return a
 }
 
 func DeobfuscationString(s string) string {
-	s = FillBase64(json.ReverseString(json.SwapCase(s)))
-	a, err := base64.URLEncoding.DecodeString(s)
+	s = json.ReverseString(json.SwapCase(s))
+	a, err := base64.RawURLEncoding.DecodeString(s)
 	if err != nil {
 		return ""
 	}

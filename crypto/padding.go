@@ -46,9 +46,8 @@ func zeroUnPadding(encrypt []byte) []byte {
 		})
 }
 
-// FillBase64 用`=`补全base64长度
 func FillBase64(s string) string {
-	if x := 4 - len(s)%4; x < 4 {
+	if x := 4 - len(s)%4; x < 4 && x > 0 {
 		return s + strings.Repeat("=", x)
 	}
 	return s

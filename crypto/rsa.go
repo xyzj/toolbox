@@ -15,7 +15,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"time"
 
 	gopool "github.com/xyzj/go-pool"
@@ -234,7 +234,16 @@ func (w *RSA) Decode(b []byte) (string, error) {
 
 // DecodeBase64 从base64字符串解码
 func (w *RSA) DecodeBase64(s string) (string, error) {
-	b, err := base64.StdEncoding.DecodeString(FillBase64(s))
+	b, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		return "", err
+	}
+	return w.Decode(b)
+}
+
+// DecodeURLBase64 从urlbase64字符串解码
+func (w *RSA) DecodeURLBase64(s string) (string, error) {
+	b, err := base64.URLEncoding.DecodeString(s)
 	if err != nil {
 		return "", err
 	}
@@ -332,9 +341,7 @@ func (w *RSA) CreateCert(opt *CertOpt) error {
 		opt.IP = []string{"127.0.0.1"}
 	}
 	ips := make([]net.IP, 0, len(opt.IP))
-	sort.Slice(opt.IP, func(i, j int) bool {
-		return opt.IP[i] < opt.IP[j]
-	})
+	slices.Sort(opt.IP)
 	for _, v := range opt.IP {
 		ips = append(ips, net.ParseIP(v))
 	}

@@ -244,7 +244,7 @@ func CountCrc16VB(data *[]byte) []byte {
 	ch := byte(0xa0)
 	for _, v := range *data {
 		crc16lo ^= v
-		for i := 0; i < 8; i++ {
+		for range 8 {
 			savehi := crc16hi
 			savelo := crc16lo
 			crc16hi /= 2
@@ -316,10 +316,9 @@ func CodeString(s string) string {
 			c2++
 		}
 	}
-	a := base64.StdEncoding.EncodeToString(z.Bytes())
+	a := base64.RawStdEncoding.EncodeToString(z.Bytes())
 	a = json.ReverseString(a)
 	a = json.SwapCase(a)
-	a = strings.Replace(a, "=", "", -1)
 	return a
 }
 
@@ -330,7 +329,7 @@ func DecodeString(s string) string {
 		return ""
 	}
 	s = json.ReverseString(json.SwapCase(s))
-	if y, ex := base64.StdEncoding.DecodeString(crypto.FillBase64(s)); ex == nil {
+	if y, ex := base64.RawStdEncoding.DecodeString(s); ex == nil {
 		ns := bytes.Buffer{}
 		ns.Grow(len(y))
 		x := y[0]
@@ -353,7 +352,7 @@ func DecodeStringOld(s string) string {
 	s = SwapCase(s)
 	var ns bytes.Buffer
 	ns.Write([]byte{120, 156})
-	if y, ex := base64.StdEncoding.DecodeString(crypto.FillBase64(s)); ex == nil {
+	if y, ex := base64.StdEncoding.DecodeString(s); ex == nil {
 		x := String2Byte(string(y[0])+string(y[1]), 0)
 		z := y[2:]
 		for i := len(z) - 1; i >= 0; i-- {
@@ -432,7 +431,7 @@ func WriteVersionInfo(p, v, gv, bd, pl, a string) {
 	fn, _ := os.Executable()
 	f, _ := os.OpenFile(fmt.Sprintf("%s.ver", fn), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o444)
 	defer f.Close()
-	f.WriteString(fmt.Sprintf("\n%s\r\nVersion:\t%s\r\nGo version:\t%s\r\nBuild date:\t%s\r\nBuild OS:\t%s\r\nCode by:\t%s\r\nStart with:\t%s", p, v, gv, pl, bd, a, strings.Join(os.Args[1:], " ")))
+	fmt.Fprintf(f, "\n%s\r\nVersion:\t%s\r\nGo version:\t%s\r\nBuild date:\t%s\r\nBuild OS:\t%s\r\nCode by:\t%s\r\nStart with:\t%s", p, v, gv, pl, bd, a, strings.Join(os.Args[1:], " "))
 }
 
 // CalculateSecurityCode calculate security code
@@ -483,7 +482,7 @@ func GetRandomString(l int64, letteronly ...bool) string {
 	}
 	lbb := len(bb)
 	var rs strings.Builder
-	for i := int64(0); i < l; i++ {
+	for range l {
 		rs.WriteByte(bb[rand.Intn(lbb)])
 	}
 	return rs.String()

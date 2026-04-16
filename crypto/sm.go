@@ -12,7 +12,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/tjfoc/gmsm/sm2"
@@ -207,7 +207,15 @@ func (w *SM2) Decode(b []byte) (string, error) {
 
 // DecodeBase64 从base64字符串解码
 func (w *SM2) DecodeBase64(s string) (string, error) {
-	b, err := base64.StdEncoding.DecodeString(FillBase64(s))
+	b, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		return "", err
+	}
+	return w.Decode(b)
+}
+
+func (w *SM2) DecodeURLBase64(s string) (string, error) {
+	b, err := base64.URLEncoding.DecodeString(s)
 	if err != nil {
 		return "", err
 	}
@@ -305,9 +313,7 @@ func (w *SM2) CreateCert(opt *CertOpt) error {
 		opt.IP = []string{"127.0.0.1"}
 	}
 	ips := make([]net.IP, 0, len(opt.IP))
-	sort.Slice(opt.IP, func(i, j int) bool {
-		return opt.IP[i] < opt.IP[j]
-	})
+	slices.Sort(opt.IP)
 	for _, v := range opt.IP {
 		ips = append(ips, net.ParseIP(v))
 	}
@@ -489,14 +495,23 @@ func (w *SM4) Decode(b []byte) (string, error) {
 
 // DecodeBase64 解密base64编码的字符串
 func (w *SM4) DecodeBase64(s string) (string, error) {
-	b, err := base64.StdEncoding.DecodeString(FillBase64(s))
+	b, err := base64.StdEncoding.DecodeString(s)
 	if err != nil {
 		return "", err
 	}
 	return w.Decode(b)
 }
 
-// Decrypt 兼容旧方法，直接解析base64字符串
+// DecodeURLBase64 解密url-safe base64编码的字符串
+func (w *SM4) DecodeURLBase64(s string) (string, error) {
+	b, err := base64.URLEncoding.DecodeString(s)
+	if err != nil {
+		return "", err
+	}
+	return w.Decode(b)
+}
+
+// Decrypt 兼容旧	return w.Decode(b)方法，直接解析base64字符串
 func (w *SM4) Decrypt(s string) string {
 	x, _ := w.DecodeBase64(s)
 	return x

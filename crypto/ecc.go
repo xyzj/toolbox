@@ -15,7 +15,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -186,7 +186,7 @@ func (w *ECC) Decode(b []byte) (string, error) {
 
 // Deprecated: DecodeBase64 从base64字符串解码
 func (w *ECC) DecodeBase64(s string) (string, error) {
-	b, err := base64.StdEncoding.DecodeString(FillBase64(s))
+	b, err := base64.StdEncoding.DecodeString(s)
 	if err != nil {
 		return "", err
 	}
@@ -275,9 +275,7 @@ func (w *ECC) CreateCert(opt *CertOpt) error {
 		opt.IP = []string{"127.0.0.1"}
 	}
 	ips := make([]net.IP, 0, len(opt.IP))
-	sort.Slice(opt.IP, func(i, j int) bool {
-		return opt.IP[i] < opt.IP[j]
-	})
+	slices.Sort(opt.IP)
 	for _, v := range opt.IP {
 		ips = append(ips, net.ParseIP(v))
 	}
