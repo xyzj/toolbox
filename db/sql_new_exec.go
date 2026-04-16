@@ -166,6 +166,12 @@ func (d *Conn) ExecPrepareByDB(dbidx int, s string, paramNum int, params ...any)
 }
 
 func (d *Conn) rollbackCheck(tx *sql.Tx) {
+	// recover() 可以捕获当前 goroutine 的 panic
+	if r := recover(); r != nil {
+		_ = tx.Rollback()
+		// 捕获 panic 后继续抛出，避免掩盖严重的程序错误
+		panic(r)
+	}
 	if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
 		d.cfg.Logger.Error("[DB] " + err.Error())
 	}

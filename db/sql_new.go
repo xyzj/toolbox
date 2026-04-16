@@ -280,6 +280,10 @@ func (d *Conn) SQLDBByName(dbname string) (*sql.DB, error) {
 	return nil, errors.New(dbname + " not found")
 }
 
+func (d *Conn) SetTimeout(timeout time.Duration) {
+	d.cfg.Timeout = timeout
+}
+
 // SetDefaultDB 连接多个数据库的时候，设置默认的数据库名称
 func (d *Conn) SetDefaultDB(dbidx int) error {
 	if v, ok := d.dbs[dbidx]; !ok {
