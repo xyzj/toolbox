@@ -175,6 +175,7 @@ func (f *File) FromFile(configfile string) error {
 	if f.filepath == "" {
 		return nil
 	}
+	f.filepath, _ = filepath.Abs(f.filepath)
 	if f.data == nil {
 		f.data = &bytes.Buffer{}
 	} else {

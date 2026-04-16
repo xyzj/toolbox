@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"math"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -76,13 +77,6 @@ func TestConv(t *testing.T) {
 }
 
 func TestConf(t *testing.T) {
-	a := NewConfig("a.conf")
-	// a.FromFile("")
-	a.PutItem(&Item{Key: "key1", Value: NewValue("1231dsdf"), Comment: ""})
-	a.PutItem(&Item{Key: "key2", Value: NewValue("adf4s"), Comment: ""})
-	a.PutItem(&Item{Key: "key3", Value: NewValue("dfs3fg"), Comment: ""})
-	a.PutItem(&Item{Key: "key4", Value: NewValue("vv323f"), Comment: ""})
-	b := a.GetItem("key1")
-	println(b.String())
-	a.Save()
+	f := "./testdata/conf.ini"
+	println(filepath.Abs(f))
 }

@@ -1,6 +1,7 @@
 package db
 
 import (
+	"path/filepath"
 	"time"
 
 	"github.com/xyzj/toolbox/json"
@@ -140,6 +141,7 @@ func (b *BoltDB) ForEach(f func(k, v string) error, bucket ...string) {
 
 // NewBolt 创建一个新的bolt数据文件
 func NewBolt(f string) (*BoltDB, error) {
+	f, _ = filepath.Abs(f)
 	db, err := bbolt.Open(f, 0o664, &bbolt.Options{Timeout: time.Second * 2})
 	if err != nil {
 		return nil, err

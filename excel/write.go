@@ -157,6 +157,7 @@ func (fd *FileData) ToFile(f string) (string, error) {
 	if !strings.HasSuffix(fn, ".xlsx") {
 		fn += ".xlsx"
 	}
+	fn, _ = filepath.Abs(fn)
 	if !isExist(filepath.Dir(fn)) {
 		os.MkdirAll(filepath.Dir(fn), 0o775)
 	}
