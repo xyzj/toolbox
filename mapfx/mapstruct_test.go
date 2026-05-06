@@ -37,7 +37,7 @@ func TestStruct(t *testing.T) {
 	bb, _ := a.Load("test1")
 	println(fmt.Sprintf("%+v", bb))
 
-	err := a.ForEachReadOnly(func(key string, value *aaa) bool {
+	err := a.ReadEach(func(key string, value *aaa) bool {
 		println(key, fmt.Sprintf("--- %+v", value))
 
 		return true

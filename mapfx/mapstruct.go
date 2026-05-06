@@ -204,15 +204,14 @@ func (m *StructMap[KEY, VALUE]) ForEach(f func(key KEY, value *VALUE) bool) (err
 	return err
 }
 
-// ForEachReadOnly 遍历map的key和value
+// ReadEach 遍历map的key和value
 //
 //	使用rlocker进行便利，遍历过程中不应该进行读写
-func (m *StructMap[KEY, VALUE]) ForEachReadOnly(f func(key KEY, value *VALUE) bool) (err error) {
+func (m *StructMap[KEY, VALUE]) ReadEach(f func(key KEY, value *VALUE) bool) (err error) {
 	m.locker.RLock()
 	defer func() {
 		if ex := recover(); ex != nil {
 			err = errors.WithStack(ex.(error))
-			println(fmt.Sprintf("map foreach error :%+v", errors.WithStack(err)))
 		}
 		m.locker.RUnlock()
 	}()
