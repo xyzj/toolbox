@@ -22,8 +22,9 @@ import (
 )
 
 var (
-	payloadFormat byte   = 1
-	messageExpiry uint32 = 600
+	UnspecifiedPayload PayloadFormat = 0
+	Utf8Payload        PayloadFormat = 1
+	messageExpiry      uint32        = 600
 )
 
 var (
@@ -32,15 +33,46 @@ var (
 	ErrorNotConnected = fmt.Errorf("not connect to the server")
 )
 
+type PayloadFormat byte
+type payloadOpt struct {
+	pf       byte
+	qos      byte
+	useQueue bool
+}
+type PayloadOpts func(opt *payloadOpt)
+
+func WithPayloadFormat(pf PayloadFormat) PayloadOpts {
+	return func(opt *payloadOpt) {
+		switch pf {
+		case UnspecifiedPayload:
+			opt.pf = 0
+		default:
+			opt.pf = 1
+		}
+	}
+}
+
+func WithQos(qos byte) PayloadOpts {
+	return func(opt *payloadOpt) {
+		opt.qos = qos
+	}
+}
+func WithQueue(useQueue bool) PayloadOpts {
+	return func(opt *payloadOpt) {
+		opt.useQueue = useQueue
+	}
+}
+
 var EmptyMQTTClientV5 = &MqttClientV5{
 	empty: true,
 	st:    &atomic.Bool{},
 }
 
 type mqttMessage struct {
-	qos   byte
-	body  []byte
-	topic string
+	body          []byte
+	topic         string
+	qos           byte
+	payloadFormat PayloadFormat
 }
 
 // MqttOpt mqtt 配置
@@ -77,7 +109,7 @@ type MqttOpt struct {
 type MqttClientV5 struct {
 	cnf         *MqttOpt
 	client      *autopaho.ConnectionManager
-	failedCache *cache.AnyCache[*mqttMessage]
+	failedCache *cache.AnyCache[*paho.Publish]
 	st          *atomic.Bool
 	ctxCancel   context.CancelFunc
 	empty       bool
@@ -125,24 +157,42 @@ func (m *MqttClientV5) IsConnectionOpen() bool {
 
 // Write 以qos0发送消息
 func (m *MqttClientV5) Write(topic string, body []byte) error {
-	return m.WriteWithQos(topic, body, 0)
+	return m.WriteWithOpt(topic, body, WithPayloadFormat(Utf8Payload), WithQos(0), WithQueue(true))
 }
 
 // WriteWithQos 发送消息，可自定义qos
 func (m *MqttClientV5) WriteWithQos(topic string, body []byte, qos byte) error {
+	return m.WriteWithOpt(topic, body, WithPayloadFormat(Utf8Payload), WithQos(qos), WithQueue(true))
+}
+
+// WriteWithOpt 发送消息，可自定义qos和payload format等选项
+func (m *MqttClientV5) WriteWithOpt(topic string, body []byte, opts ...PayloadOpts) error {
 	if m.empty {
 		return nil
+	}
+	opt := &payloadOpt{
+		pf:  1,
+		qos: 0,
+	}
+	for _, o := range opts {
+		o(opt)
+	}
+	p := &paho.Publish{
+		QoS:     opt.qos,
+		Topic:   topic,
+		Payload: body,
+		Retain:  false,
+		Properties: &paho.PublishProperties{
+			PayloadFormat: &opt.pf,
+			MessageExpiry: &messageExpiry,
+		},
 	}
 	if !m.st.Load() || m.client == nil { // 未连接状态
 		if m.cnf.EnableFailureCache {
 			if m.failedCache.Len() < m.cnf.FailureCacheMax {
 				m.failedCache.StoreWithExpire(
 					time.Now().Format(time.RFC3339Nano),
-					&mqttMessage{
-						topic: topic,
-						body:  body,
-						qos:   qos,
-					},
+					p,
 					m.cnf.FailureCacheExpire)
 				return ErrorResendCache
 			}
@@ -151,24 +201,19 @@ func (m *MqttClientV5) WriteWithQos(topic string, body []byte, qos byte) error {
 	}
 	ctx, cancel := context.WithTimeout(context.TODO(), time.Second*3)
 	defer cancel()
-	err := m.client.PublishViaQueue(ctx, &autopaho.QueuePublish{
-		Publish: &paho.Publish{
-			QoS:     qos,
-			Topic:   topic,
-			Payload: body,
-			Retain:  false,
-			Properties: &paho.PublishProperties{
-				PayloadFormat: &payloadFormat,
-				MessageExpiry: &messageExpiry,
-				ContentType:   "text/plain",
-			},
-		},
-	})
+	var err error
+	if opt.useQueue {
+		err = m.client.PublishViaQueue(ctx, &autopaho.QueuePublish{
+			Publish: p,
+		})
+	} else {
+		_, err = m.client.Publish(ctx, p)
+	}
 	if err != nil {
 		m.cnf.Logg.Debug(m.cnf.LogHeader + "serr:" + topic + "|" + err.Error())
 		return err
 	}
-	m.cnf.Logg.Debug(m.cnf.LogHeader + " s:" + topic)
+	m.cnf.Logg.Debug(m.cnf.LogHeader + " s:" + topic + "(" + strconv.Itoa(len(body)) + ")")
 	return nil
 }
 
@@ -216,9 +261,9 @@ func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte))
 	connSt := &atomic.Bool{}
 	code142 := &atomic.Bool{}
 	code133 := &atomic.Bool{}
-	failedCache := cache.NewAnyCacheWithExpireFunc(opt.FailureCacheExpire, func(m map[string]*mqttMessage) {
+	failedCache := cache.NewAnyCacheWithExpireFunc(opt.FailureCacheExpire, func(m map[string]*paho.Publish) {
 		for _, v := range m {
-			opt.FailureCacheExpireFunc(v.topic, v.body)
+			opt.FailureCacheExpireFunc(v.Topic, v.Payload)
 		}
 	})
 	conf := autopaho.ClientConfig{
@@ -263,29 +308,20 @@ func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte))
 			// 对失败消息进行补发
 			if opt.EnableFailureCache {
 				var err error
-				failedCache.ForEach(func(key string, value *mqttMessage) bool {
+				failedCache.ForEach(func(key string, value *paho.Publish) bool {
 					ctx, cancel := context.WithTimeout(context.TODO(), time.Second*3)
 					defer cancel()
 					err = cm.PublishViaQueue(ctx, &autopaho.QueuePublish{
-						Publish: &paho.Publish{
-							QoS:     value.qos,
-							Topic:   value.topic,
-							Payload: value.body,
-							Retain:  false,
-							Properties: &paho.PublishProperties{
-								PayloadFormat: &payloadFormat,
-								MessageExpiry: &messageExpiry,
-								ContentType:   "text/plain",
-							},
-						},
+						Publish: value,
 					})
 					if err != nil {
-						opt.Logg.Error(opt.LogHeader + " reerr:" + value.topic + "|" + err.Error())
+						opt.Logg.Error(opt.LogHeader + " reerr:" + value.Topic + "|" + err.Error())
 					} else {
-						opt.Logg.Info(fmt.Sprintf("%s re:%s|%v", opt.LogHeader, value.topic, value.body))
+						opt.Logg.Info(fmt.Sprintf("%s re:%s|%v", opt.LogHeader, value.Topic, value.Payload))
 					}
 					return true
 				})
+				failedCache.Clear()
 			}
 		},
 		OnConnectError: func(err error) {
