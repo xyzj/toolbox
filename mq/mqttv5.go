@@ -160,11 +160,6 @@ func (m *MqttClientV5) Write(topic string, body []byte) error {
 	return m.WriteWithOpt(topic, body, WithPayloadFormat(Utf8Payload), WithQos(0), WithQueue(true))
 }
 
-// WriteWithQos 发送消息，可自定义qos
-func (m *MqttClientV5) WriteWithQos(topic string, body []byte, qos byte) error {
-	return m.WriteWithOpt(topic, body, WithPayloadFormat(Utf8Payload), WithQos(qos), WithQueue(true))
-}
-
 // WriteWithOpt 发送消息，可自定义qos和payload format等选项
 func (m *MqttClientV5) WriteWithOpt(topic string, body []byte, opts ...PayloadOpts) error {
 	if m.empty {

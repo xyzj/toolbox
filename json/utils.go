@@ -7,6 +7,19 @@ import (
 	"unsafe"
 )
 
+// ASCII 过滤非ASCII字符
+func ASCII(b []byte) string {
+	result := make([]byte, 0, len(b))
+	for _, b1 := range b {
+		// ASCII 标准范围是 0-127
+		// 如果要排除 \x00 (NUL) 等控制字符，可以判断 b >= 32 && b <= 126
+		if b1 >= 32 && b1 <= 126 {
+			result = append(result, b1)
+		}
+	}
+	return String(result)
+}
+
 // Bytes 内存地址转换string
 func Bytes(s string) []byte {
 	if len(s) == 0 {
@@ -62,6 +75,7 @@ func SwapCase(s string) string {
 	return ns.String()
 }
 
+// RemoveUnvisiable removes non-printable and symbol characters from a string.
 func RemoveUnvisiable(s string) string {
 	buf := strings.Builder{}
 	buf.Grow(len(s))
@@ -73,6 +87,7 @@ func RemoveUnvisiable(s string) string {
 	return buf.String()
 }
 
+// ReverseString reverse string in place
 func ReverseString(s string) string {
 	runes := []rune(s)
 	for from, to := 0, len(runes)-1; from < to; from, to = from+1, to-1 {
@@ -81,6 +96,7 @@ func ReverseString(s string) string {
 	return string(runes)
 }
 
+// ReverseBytes reverse byte slice in place
 func ReverseBytes(b []byte) []byte {
 	for from, to := 0, len(b)-1; from < to; from, to = from+1, to-1 {
 		b[from], b[to] = b[to], b[from]

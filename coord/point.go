@@ -147,6 +147,8 @@ func (p *Point) InLineBuffer(line []*Point, buffer float64) bool {
 	}
 	return false
 }
+
+// Text2Geo converts a WKT (Well-Known Text) representation of a geometry into a slice of Point pointers.
 func Text2Geo(s string) []*Point {
 	geostr := strings.Split(georep.Replace(s), ",")
 	gp := make([]*Point, 0, len(geostr))
@@ -160,12 +162,19 @@ func Text2Geo(s string) []*Point {
 	return gp
 }
 
+// Geo2Text converts a slice of Point pointers into a WKT (Well-Known Text) representation.
 func Geo2Text(gp []*Point) string {
-	geostr := "POINT(0 0)" // 默认值，上海
+	geostr := "POINT(0 0)" // 默认
 	switch len(gp) {
 	case 0: // 没有位置
 	case 1: // 点
 		geostr = gp[0].GeoText()
+	case 2: // 线
+		if gp[0].Equals(gp[1]) { // 前后2点一致，表示点
+			geostr = gp[0].GeoText()
+		} else {
+			geostr = fmt.Sprintf("LINESTRING(%s)", strings.Join([]string{gp[0].String(), gp[1].String()}, ","))
+		}
 	default: // 线或者面
 		pts := make([]string, len(gp))
 		for k, v := range gp {
