@@ -37,7 +37,7 @@ func TestMQ5(t *testing.T) {
 		},
 		Logg: logger.NewConsoleLogger(),
 	}
-	v3, _ = NewMQTTClientV5(opt, func(topic string, body []byte) {
+	v3, _ = NewMqttClientV5(opt, func(topic string, body []byte) {
 		println("v3 recv:", topic)
 	})
 	opt5 := &MqttOpt{
@@ -56,7 +56,7 @@ func TestMQ5(t *testing.T) {
 		// ClientID: "123122334e234d",
 		Logg: logger.NewConsoleLogger(),
 	}
-	v5, _ = NewMQTTClientV5(opt5, func(topic string, body []byte) {
+	v5, _ = NewMqttClientV5(opt5, func(topic string, body []byte) {
 		println("v5 recv:", topic)
 	})
 
@@ -88,7 +88,7 @@ func TestCli(t *testing.T) {
 		},
 		Logg: logger.NewConsoleLogger(),
 	}
-	v3, _ := NewMQTTClientV5(opt, func(topic string, body []byte) {
+	v3, _ := NewMqttClientV5(opt, func(topic string, body []byte) {
 		time.Sleep(time.Second * 10)
 		println("v3 recv:", topic)
 	})

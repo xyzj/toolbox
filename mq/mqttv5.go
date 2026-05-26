@@ -35,12 +35,18 @@ var (
 
 type PayloadFormat byte
 type payloadOpt struct {
-	pf       byte
-	qos      byte
-	useQueue bool
+	expire   uint32 // default 600 seconds
+	pf       byte   // 0: Unspecified, 1: UTF-8 encoded character data
+	qos      byte   // 0,1,2
+	useQueue bool   // default false, if true, use PublishViaQueue to send message, which will be stored in client side until successfully sent to server, and resend when reconnecting
 }
 type PayloadOpts func(opt *payloadOpt)
 
+func WithExpire(expire time.Duration) PayloadOpts {
+	return func(opt *payloadOpt) {
+		opt.expire = uint32(expire.Seconds())
+	}
+}
 func WithPayloadFormat(pf PayloadFormat) PayloadOpts {
 	return func(opt *payloadOpt) {
 		switch pf {
@@ -63,16 +69,9 @@ func WithQueue(useQueue bool) PayloadOpts {
 	}
 }
 
-var EmptyMQTTClientV5 = &MqttClientV5{
+var EmptyMqttClientV5 = &MqttClientV5{
 	empty: true,
 	st:    &atomic.Bool{},
-}
-
-type mqttMessage struct {
-	body          []byte
-	topic         string
-	qos           byte
-	payloadFormat PayloadFormat
 }
 
 // MqttOpt mqtt 配置
@@ -155,19 +154,16 @@ func (m *MqttClientV5) IsConnectionOpen() bool {
 	return m.st.Load()
 }
 
-// Write 以qos0发送消息
-func (m *MqttClientV5) Write(topic string, body []byte) error {
-	return m.WriteWithOpt(topic, body, WithPayloadFormat(Utf8Payload), WithQos(0), WithQueue(true))
-}
-
 // WriteWithOpt 发送消息，可自定义qos和payload format等选项
-func (m *MqttClientV5) WriteWithOpt(topic string, body []byte, opts ...PayloadOpts) error {
+func (m *MqttClientV5) Write(topic string, body []byte, opts ...PayloadOpts) error {
 	if m.empty {
 		return nil
 	}
 	opt := &payloadOpt{
-		pf:  1,
-		qos: 0,
+		expire:   messageExpiry,
+		pf:       1,
+		qos:      0,
+		useQueue: false,
 	}
 	for _, o := range opts {
 		o(opt)
@@ -179,7 +175,7 @@ func (m *MqttClientV5) WriteWithOpt(topic string, body []byte, opts ...PayloadOp
 		Retain:  false,
 		Properties: &paho.PublishProperties{
 			PayloadFormat: &opt.pf,
-			MessageExpiry: &messageExpiry,
+			MessageExpiry: &opt.expire,
 		},
 	}
 	if !m.st.Load() || m.client == nil { // 未连接状态
@@ -212,10 +208,10 @@ func (m *MqttClientV5) WriteWithOpt(topic string, body []byte, opts ...PayloadOp
 	return nil
 }
 
-// NewMQTTClientV5 创建一个5.0的mqtt client
-func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte)) (*MqttClientV5, error) {
+// NewMqttClientV5 创建一个5.0的mqtt client
+func NewMqttClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte)) (*MqttClientV5, error) {
 	if opt == nil {
-		return EmptyMQTTClientV5, ErrorOptions
+		return EmptyMqttClientV5, ErrorOptions
 	}
 	if opt.SendTimeo == 0 {
 		opt.SendTimeo = time.Second * 5
@@ -251,7 +247,7 @@ func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte))
 	}
 	u, err := url.Parse(opt.Addr)
 	if err != nil {
-		return EmptyMQTTClientV5, err
+		return EmptyMqttClientV5, err
 	}
 	connSt := &atomic.Bool{}
 	code142 := &atomic.Bool{}
@@ -360,7 +356,7 @@ func NewMQTTClientV5(opt *MqttOpt, recvCallback func(topic string, body []byte))
 	if err != nil {
 		opt.Logg.Error(opt.LogHeader + " new connection error: " + err.Error())
 		funClose()
-		return EmptyMQTTClientV5, err
+		return EmptyMqttClientV5, err
 	}
 	ctx, cancel := context.WithTimeout(context.TODO(), time.Second*3)
 	defer cancel()
