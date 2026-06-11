@@ -16,6 +16,23 @@ const (
 	LogSystem  LogLevel = 90
 )
 
+func GetLevel(l string) LogLevel {
+	switch l {
+	case "debug":
+		return LogDebug
+	case "info":
+		return LogInfo
+	case "warning":
+		return LogWarning
+	case "error":
+		return LogError
+	case "system":
+		return LogSystem
+	default:
+		return LogInfo
+	}
+}
+
 // Logger 日志接口
 type Logger interface {
 	Debug(msg string)

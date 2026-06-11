@@ -189,9 +189,9 @@ func (t *TCPManager) Listen() error {
 }
 
 // Shutdown gracefully shuts down the TCPManager.
-func (t *TCPManager) Shutdown() {
+func (t *TCPManager) Shutdown() error {
 	t.shutdown.Store(true)
-	t.listener.Close()
+	return t.listener.Close()
 }
 
 // Len returns the number of active members.

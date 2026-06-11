@@ -36,8 +36,8 @@ func NewFileStorage(filename string) (llms.Storage, error) {
 }
 
 func (s *FileStorage) Clear() {
-	s.db.ForEach(func(k, v string) error {
-		s.db.Delete(k)
+	s.db.ForEach("default", func(k, v string) error {
+		s.db.Delete("default", k)
 		return nil
 	})
 }
@@ -45,7 +45,7 @@ func (s *FileStorage) Clear() {
 func (s *FileStorage) Load() (map[string]*llms.ChatData, error) {
 	data := make(map[string]*llms.ChatData)
 	var err error
-	s.db.ForEach(func(k, v string) error {
+	s.db.ForEach("default", func(k, v string) error {
 		x := &llms.ChatData{}
 		err = x.FromJSON(v)
 		if err != nil {
@@ -58,13 +58,13 @@ func (s *FileStorage) Load() (map[string]*llms.ChatData, error) {
 }
 
 func (s *FileStorage) Store(d *llms.ChatData) error {
-	return s.db.Write(d.ID, d.ToJSON())
+	return s.db.Write("default", d.ID, d.ToJSON())
 }
 
 func (s *FileStorage) RemoveDead(t time.Duration) {
-	s.db.ForEach(func(k, v string) error {
+	s.db.ForEach("default", func(k, v string) error {
 		if time.Since(time.Unix(gjson.Get(v, "last_update").Int(), 0)) > t {
-			s.db.Delete(k)
+			s.db.Delete("default", k)
 		}
 		return nil
 	})

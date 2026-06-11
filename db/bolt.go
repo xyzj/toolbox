@@ -1,6 +1,8 @@
 package db
 
 import (
+	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -10,114 +12,157 @@ import (
 
 // BoltDB bolt数据文件实例
 type BoltDB struct {
-	db       *bbolt.DB
-	bucket   []byte
+	cli      *bbolt.DB
 	filename string
 }
 
-// Close 关闭文件数据库
-func (b *BoltDB) Close() error {
-	return b.db.Close()
-}
-
-// Read 读取一个值
-func (b *BoltDB) Read(key string, bucket ...string) string {
-	var buc []byte
-	if len(bucket) == 0 {
-		buc = b.bucket
-	} else {
-		if bucket[0] == "" {
-			buc = b.bucket
-		} else {
-			buc = json.Bytes(bucket[0])
-		}
+func (c *BoltDB) Write(bucket, key, value string) error {
+	if c.cli == nil {
+		return fmt.Errorf("bolt client is not initialized")
 	}
-	var value string
-	b.db.View(func(tx *bbolt.Tx) error {
-		t := tx.Bucket(buc)
-		if t == nil {
-			value = ""
-			return nil
-		}
-		b := t.Get(json.Bytes(key))
-		if b == nil {
-			value = ""
-		} else {
-			value = json.String(b)
-		}
-		return nil
-	})
-	return value
-}
-
-// Write 写入一个值
-func (b *BoltDB) Write(key, value string, bucket ...string) error {
-	var buc []byte
-	if len(bucket) == 0 {
-		buc = b.bucket
-	} else {
-		if bucket[0] == "" {
-			buc = b.bucket
-		} else {
-			buc = json.Bytes(bucket[0])
-		}
+	if bucket == "" {
+		bucket = "default"
 	}
-	return b.db.Update(func(tx *bbolt.Tx) error {
-		t, err := tx.CreateBucketIfNotExists(buc)
+	return c.cli.Update(func(tx *bbolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte(bucket))
 		if err != nil {
 			return err
 		}
-		return t.Put(json.Bytes(key), json.Bytes(value))
+		return b.Put([]byte(key), []byte(value))
 	})
 }
 
-// Delete 删除一个值
-func (b *BoltDB) Delete(key string, bucket ...string) error {
-	var buc []byte
-	if len(bucket) == 0 {
-		buc = b.bucket
-	} else {
-		if bucket[0] == "" {
-			buc = b.bucket
-		} else {
-			buc = json.Bytes(bucket[0])
-		}
+func (c *BoltDB) Read(bucket, key string) (string, error) {
+	if c.cli == nil {
+		return "", fmt.Errorf("bolt client is not initialized")
 	}
-	return b.db.Update(func(tx *bbolt.Tx) error {
-		t := tx.Bucket(buc)
-		if t == nil {
-			return nil
+	if bucket == "" {
+		bucket = "default"
+	}
+	var value string
+	err := c.cli.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte(bucket))
+		if b == nil {
+			return fmt.Errorf("bucket %s not found", bucket)
 		}
-		return t.Delete(json.Bytes(key))
+		v := b.Get([]byte(key))
+		if v == nil {
+			return fmt.Errorf("key %s not found in bucket %s", key, bucket)
+		}
+		value = string(v)
+		return nil
+	})
+	return value, err
+}
+func (c *BoltDB) Delete(bucket, key string) error {
+	if c.cli == nil {
+		return fmt.Errorf("bolt client is not initialized")
+	}
+	if bucket == "" {
+		bucket = "default"
+	}
+	return c.cli.Update(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte(bucket))
+		if b == nil {
+			return fmt.Errorf("bucket %s not found", bucket)
+		}
+		return b.Delete([]byte(key))
+	})
+}
+func (c *BoltDB) DeleteBucket(bucket string) error {
+	if c.cli == nil {
+		return fmt.Errorf("bolt client is not initialized")
+	}
+	if bucket == "" {
+		bucket = "default"
+	}
+	return c.cli.Update(func(tx *bbolt.Tx) error {
+		return tx.DeleteBucket([]byte(bucket))
 	})
 }
 
-// DeleteBucket 删除一个值
-func (b *BoltDB) DeleteBucket(bucket string) error {
-	var buc = json.Bytes(bucket)
-	return b.db.Update(func(tx *bbolt.Tx) error {
-		t := tx.Bucket(buc)
-		if t == nil {
-			return nil
+func (c *BoltDB) List(bucket string) (map[string]string, error) {
+	if c.cli == nil {
+		return nil, fmt.Errorf("bolt client is not initialized")
+	}
+	if bucket == "" {
+		bucket = "default"
+	}
+	result := make(map[string]string)
+	err := c.cli.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte(bucket))
+		if b == nil {
+			return fmt.Errorf("bucket %s not found", bucket)
 		}
-		return t.DeleteBucket(json.Bytes(bucket))
+		return b.ForEach(func(k, v []byte) error {
+			result[string(k)] = string(v)
+			return nil
+		})
 	})
+	return result, err
+}
+func (c *BoltDB) ListBuckets() ([]string, error) {
+	if c.cli == nil {
+		return nil, fmt.Errorf("bolt client is not initialized")
+	}
+	var buckets []string
+	err := c.cli.View(func(tx *bbolt.Tx) error {
+		return tx.ForEach(func(name []byte, _ *bbolt.Bucket) error {
+			buckets = append(buckets, string(name))
+			return nil
+		})
+	})
+	return buckets, err
+}
+func (c *BoltDB) Exists(bucket, key string) (bool, error) {
+	if c.cli == nil {
+		return false, fmt.Errorf("bolt client is not initialized")
+	}
+	if bucket == "" {
+		bucket = "default"
+	}
+	var exists bool
+	err := c.cli.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte(bucket))
+		if b == nil {
+			return fmt.Errorf("bucket %s not found", bucket)
+		}
+		v := b.Get([]byte(key))
+		exists = v != nil
+		return nil
+	})
+	return exists, err
+}
+
+func (c *BoltDB) Health() error {
+	if c.cli == nil {
+		return fmt.Errorf("bolt client is not initialized")
+	}
+	err := c.cli.View(func(tx *bbolt.Tx) error {
+		return nil
+	})
+	return err
+}
+
+func (c *BoltDB) Close() error {
+	if c.cli == nil {
+		return nil
+	}
+	return c.cli.Close()
 }
 
 // ForEach 遍历所有key,value
-func (b *BoltDB) ForEach(f func(k, v string) error, bucket ...string) {
-	var buc []byte
-	if len(bucket) == 0 {
-		buc = b.bucket
-	} else {
-		if bucket[0] == "" {
-			buc = b.bucket
-		} else {
-			buc = json.Bytes(bucket[0])
-		}
+func (b *BoltDB) ForEach(bucket string, f func(k, v string) error) {
+	if b.cli == nil {
+		return
 	}
+	var buc []byte
+	if bucket == "" {
+		bucket = "default"
+	}
+	buc = json.Bytes(bucket)
 	data := make(map[string]string)
-	b.db.View(func(tx *bbolt.Tx) error {
+	b.cli.View(func(tx *bbolt.Tx) error {
 		t := tx.Bucket(buc)
 		if t == nil {
 			return nil
@@ -141,15 +186,19 @@ func (b *BoltDB) ForEach(f func(k, v string) error, bucket ...string) {
 
 // NewBolt 创建一个新的bolt数据文件
 func NewBolt(f string) (*BoltDB, error) {
-	f, _ = filepath.Abs(f)
-	db, err := bbolt.Open(f, 0o664, &bbolt.Options{Timeout: time.Second * 2})
+	dir := filepath.Dir(f)
+	if dir != "." && dir != "" {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return nil, err
+		}
+	}
+	db, err := bbolt.Open(f, 0o640, &bbolt.Options{Timeout: time.Second * 2})
 	if err != nil {
 		return nil, err
 	}
 
 	return &BoltDB{
-		db:       db,
-		bucket:   json.Bytes("default"),
+		cli:      db,
 		filename: f,
 	}, nil
 }

@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
+	"log"
 	"math/big"
 	"net"
 	"os"
@@ -113,9 +114,35 @@ func (w *SM2) SetPublicKeyFromFile(keyPath string) error {
 	// return w.SetPublicKey(base64.StdEncoding.EncodeToString(block.Bytes))
 }
 
+// SetPublicKeyRaw 设置hexstring格式的公钥
+func (w *SM2) SetPublicKeyRaw(hexstr string) error {
+	bb, err := hex.DecodeString(hexstr)
+	if err != nil {
+		return err
+	}
+	// 2. 安全校验长度和头部标志
+	// 未压缩公钥固定为 65 字节，且第一字节必须是 0x04
+	if len(bb) != 65 || bb[0] != 0x04 {
+		log.Fatalf("不是合法的65字节未压缩SM2公钥")
+	}
+
+	// 3. 直接切割字节，还原为大整数 X 和 Y
+	// bb[1:33] 是 X 分量 (32字节)
+	// bb[33:65] 是 Y 分量 (32字节)
+	x := new(big.Int).SetBytes(bb[1:33])
+	y := new(big.Int).SetBytes(bb[33:])
+	w.pubKey = &sm2.PublicKey{
+		Curve: sm2.P256Sm2(),
+		X:     x,
+		Y:     y,
+	}
+	w.pubBytes = bb
+	return nil
+}
+
 // SetPublicKey 设置base64编码的公钥
-func (w *SM2) SetPublicKey(key string) error {
-	bb, err := base64.StdEncoding.DecodeString(key)
+func (w *SM2) SetPublicKey(b64str string) error {
+	bb, err := base64.StdEncoding.DecodeString(b64str)
 	if err != nil {
 		return err
 	}

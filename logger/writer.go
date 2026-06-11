@@ -71,14 +71,16 @@ func (w *Writer) compressAndClean(oldfile string) {
 		writePanic(pathtool.JoinPathFromHere(w.cnf.file+".err"),
 			"compress old log file error:"+err.Error())
 	} else {
-		os.Remove(oldfile)
+		if w.cnf.compress != pathtool.CompressNone {
+			os.Remove(oldfile)
+		}
 	}
 	if w.cnf.maxbackups == 0 && w.cnf.maxdays == 0 {
 		return
 	}
 	// 定期清理过期日志
 	olderthen := time.Time{}
-	files, _ := pathtool.SearchFilesByTime(w.cnf.dir, w.cnf.file)
+	files, _ := pathtool.SearchFilesByTime(w.cnf.dir, strings.TrimSuffix(w.cnf.file, filepath.Ext(w.cnf.file)))
 	if len(files) < 2 {
 		return
 	}
