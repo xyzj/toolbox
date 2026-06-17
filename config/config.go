@@ -212,7 +212,7 @@ func (f *File) FromFile(configfile string) error {
 			}
 			continue
 		}
-		it := strings.Split(s, "=")
+		it := strings.SplitN(s, "=", 2)
 		if len(it) != 2 {
 			continue
 		}
