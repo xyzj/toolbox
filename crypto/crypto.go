@@ -65,7 +65,6 @@ var (
 )
 
 type Cryptor interface {
-	GenerateKey(bits RSABits) (CValue, CValue, error)
 	SetPublicKeyFromFile(keyPath string) error
 	SetPublicKey(key string) error
 	SetPrivateKeyFromFile(keyPath string) error
@@ -73,9 +72,8 @@ type Cryptor interface {
 	Encode(b []byte) (CValue, error)
 	Decode(b []byte) (string, error)
 	DecodeBase64(s string) (string, error)
-	Decrypt(s string) string
-	Encrypt(s string) string
-	EncryptTo(s string) CValue
+	Sign(b []byte) (CValue, error)
+	VerifySign(signature, data []byte) (bool, error)
 }
 type CertOpt struct {
 	// 证书包含的域名清单

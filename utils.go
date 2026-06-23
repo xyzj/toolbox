@@ -888,3 +888,23 @@ func String(b []byte) string {
 func Bytes(s string) []byte {
 	return json.Bytes(s)
 }
+
+func LeftPadZeros(s string, totalLen int) string {
+	if len(s) >= totalLen {
+		return s
+	}
+	padLen := totalLen - len(s)
+	if padLen <= 0 {
+		return s
+	}
+
+	var sb strings.Builder
+	sb.Grow(totalLen) // 核心：预分配内存，避免多次扩容带来的性能损耗
+
+	for i := 0; i < padLen; i++ {
+		sb.WriteByte('0')
+	}
+	sb.WriteString(s)
+
+	return sb.String()
+}
