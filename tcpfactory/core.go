@@ -133,7 +133,7 @@ func (t *tcpCore) send() {
 	if t.closed.Load() {
 		return
 	}
-	if msg == shutmedown {
+	if shouldShutDown(msg) {
 		t.disconnect("shut me down!")
 		return
 	}
@@ -205,7 +205,7 @@ func (t *tcpCore) sendLoop() {
 			if t.closed.Load() {
 				return
 			}
-			if msg == shutmedown {
+			if shouldShutDown(msg) {
 				t.disconnect("shut me down!")
 				return
 			}

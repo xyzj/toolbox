@@ -1,6 +1,7 @@
 package tcpfactory
 
 import (
+	"bytes"
 	"net"
 	"strings"
 	"time"
@@ -24,6 +25,15 @@ func TakeANap(t time.Duration) *SendMessage {
 }
 func ShutMeDown() *SendMessage {
 	return shutmedown
+}
+func shouldShutDown(msg *SendMessage) bool {
+	if msg == nil {
+		return false
+	}
+	if msg == shutmedown {
+		return true
+	}
+	return bytes.Equal(shutmedown.Data, msg.Data)
 }
 
 // Client defines the interface for handling TCP connection lifecycle and message processing.
