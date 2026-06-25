@@ -1,14 +1,17 @@
 package tcpfactory
 
 import (
-	"bytes"
 	"net"
 	"strings"
 	"time"
 )
 
+const (
+	strShutMeDown = "shut me down"
+)
+
 var shutmedown = &SendMessage{
-	Data:     []byte{0x73, 0x68, 0x75, 0x74, 0x20, 0x6d, 0x65, 0x20, 0x64, 0x6f, 0x77, 0x6e},
+	Data:     []byte(strShutMeDown),
 	Interval: 0,
 }
 
@@ -33,7 +36,7 @@ func shouldShutDown(msg *SendMessage) bool {
 	if msg == shutmedown {
 		return true
 	}
-	return bytes.Equal(shutmedown.Data, msg.Data)
+	return string(msg.Data) == strShutMeDown
 }
 
 // Client defines the interface for handling TCP connection lifecycle and message processing.
