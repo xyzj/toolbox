@@ -65,12 +65,13 @@ func WithLogger(l logger.Logger) HTTPOptions {
 	}
 }
 
-var defaultReqOpt = reqOptions{timeout: time.Second * 10}
+var defaultReqOpt = reqOptions{timeout: time.Second * 10, respinfo: true}
 
 type reqOptions struct {
 	timeout    time.Duration
 	logreq     bool
 	compressed bool
+	respinfo   bool
 }
 type ReqOptions func(opt *reqOptions)
 
@@ -93,6 +94,11 @@ func WithTimeout(t time.Duration) ReqOptions {
 func WithRespCompressed(b bool) ReqOptions {
 	return func(o *reqOptions) {
 		o.compressed = b
+	}
+}
+func WithRespInfo(b bool) ReqOptions {
+	return func(o *reqOptions) {
+		o.respinfo = b
 	}
 }
 
@@ -172,8 +178,10 @@ func (c *Client) DoStreamRequest(req *http.Request, header func(map[string]strin
 	if header != nil {
 		// Collect response headers
 		h := make(map[string]string)
-		h[HEADER_RESP_FROM] = req1.URL.Host
-		h[HEADER_RESP_DURATION] = time.Since(start).String()
+		if c.opt.respinfo {
+			h[HEADER_RESP_FROM] = req1.URL.Host
+			h[HEADER_RESP_DURATION] = time.Since(start).String()
+		}
 		for k := range resp.Header {
 			h[k] = resp.Header.Get(k)
 		}
@@ -249,8 +257,10 @@ func (c *Client) DoRequest(req *http.Request, opts ...ReqOptions) (int, []byte, 
 	}
 	// Collect response headers
 	h := make(map[string]string)
-	h[HEADER_RESP_FROM] = req.URL.Host
-	h[HEADER_RESP_DURATION] = time.Since(start).String()
+	if c.opt.respinfo {
+		h[HEADER_RESP_FROM] = req.URL.Host
+		h[HEADER_RESP_DURATION] = time.Since(start).String()
+	}
 	for k := range resp.Header {
 		h[k] = resp.Header.Get(k)
 	}
