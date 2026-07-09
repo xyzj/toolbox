@@ -38,9 +38,6 @@ var (
 func Marshal(v any) ([]byte, error) {
 	b, err := json.Marshal(v)
 	if err == nil {
-		if len(b) <= 2 {
-			return []byte{}, nil
-		}
 		return b, nil
 	}
 	return []byte{}, err
