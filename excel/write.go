@@ -2,6 +2,7 @@
 package excel
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -27,6 +28,14 @@ type FileData struct {
 	colStyle   *xlsx.Style
 	writeFile  *xlsx.File
 	writeSheet *xlsx.Sheet
+}
+
+type ExcelizeSheetJSON struct {
+	SheetName string     `json:"sheet_name"`
+	Rows      [][]string `json:"rows"`
+}
+type ExcelizeFileJSON struct {
+	Sheets []ExcelizeSheetJSON `json:"sheets"`
 }
 
 // GetSheet 获取Sheet,可编辑
@@ -82,7 +91,7 @@ func (fd *FileData) AddSheet(sheetname string) (*xlsx.Sheet, error) {
 
 // AddRowInSheet 在指定sheet添加行
 // cells： 每个单元格的数据，任意格式
-func (fd *FileData) AddRowInSheet(sheetname string, cells ...interface{}) error {
+func (fd *FileData) AddRowInSheet(sheetname string, cells ...any) error {
 	sheet, ok := fd.writeFile.Sheet[sheetname]
 	if !ok {
 		return errSheetNotFound(sheetname)
@@ -98,7 +107,7 @@ func (fd *FileData) AddRowInSheet(sheetname string, cells ...interface{}) error 
 
 // AddRow 在当前sheet添加行
 // cells： 每个单元格的数据，任意格式
-func (fd *FileData) AddRow(cells ...interface{}) {
+func (fd *FileData) AddRow(cells ...any) {
 	if fd.writeSheet == nil {
 		fd.writeSheet, _ = fd.AddSheet("newsheet" + strconv.Itoa(len(fd.writeFile.Sheets)+1))
 	}
@@ -167,6 +176,68 @@ func (fd *FileData) ToFile(f string) (string, error) {
 		return "", errors.New("excel-文件保存失败:" + err.Error())
 	}
 	return fn, nil
+}
+
+func (fd *FileData) ToJSON() (string, error) {
+	if fd == nil || fd.writeFile == nil {
+		return "", errors.New("excel-json序列化失败: 无效的excel对象")
+	}
+
+	ret := ExcelizeFileJSON{Sheets: make([]ExcelizeSheetJSON, 0, len(fd.writeFile.Sheets))}
+	for _, sheet := range fd.writeFile.Sheets {
+		sj := ExcelizeSheetJSON{
+			SheetName: sheet.Name,
+			Rows:      make([][]string, 0, sheet.MaxRow),
+		}
+		sheet.ForEachRow(func(r *xlsx.Row) error {
+			row := make([]string, 0, sheet.MaxCol)
+			r.ForEachCell(func(c *xlsx.Cell) error {
+				row = append(row, c.Value)
+				return nil
+			})
+			sj.Rows = append(sj.Rows, row)
+			return nil
+		}, xlsx.SkipEmptyRows)
+		ret.Sheets = append(ret.Sheets, sj)
+	}
+
+	b, err := json.Marshal(ret)
+	if err != nil {
+		return "", errors.New("excel-json序列化失败: " + err.Error())
+	}
+
+	return string(b), nil
+}
+
+func NewExcelFromJSON(b []byte, filename string) (*FileData, error) {
+	var in ExcelizeFileJSON
+	if err := json.Unmarshal(b, &in); err != nil {
+		return nil, errors.New("excel-json反序列化失败: " + err.Error())
+	}
+
+	fd, err := NewExcel(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, sh := range in.Sheets {
+		sheetName := sh.SheetName
+		if sheetName == "" {
+			sheetName = "newsheet" + strconv.Itoa(len(fd.writeFile.Sheets)+1)
+		}
+		if _, err = fd.AddSheet(sheetName); err != nil {
+			return nil, err
+		}
+		for _, r := range sh.Rows {
+			cells := make([]any, len(r))
+			for i := range r {
+				cells[i] = r[i]
+			}
+			fd.AddRow(cells...)
+		}
+	}
+
+	return fd, nil
 }
 
 // NewExcel 创建新的excel文件
