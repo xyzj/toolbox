@@ -38,6 +38,10 @@ type ExcelizeFileJSON struct {
 	Sheets []ExcelizeSheetJSON `json:"sheets"`
 }
 
+func (fd *FileData) GetFileObject() *xlsx.File {
+	return fd.writeFile
+}
+
 // GetSheet 获取Sheet,可编辑
 func (fd *FileData) GetSheet(sheetname string) (*xlsx.Sheet, error) {
 	sheet, ok := fd.writeFile.Sheet[sheetname]
