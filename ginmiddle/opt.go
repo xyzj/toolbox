@@ -17,7 +17,6 @@ var defaultOpt = Opt{
 	idleTimeout:  time.Second * 60,
 	out:          os.Stdout,
 	hosts:        make([]string, 0),
-	http:         ":6880",
 	debug:        false,
 	tlsc:         nil,
 }

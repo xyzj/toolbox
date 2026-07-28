@@ -108,9 +108,7 @@ func ListenAndServeWithOption(opts ...Opts) {
 	wg := sync.WaitGroup{}
 	// 启动https服务
 	if opt.https != "" {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			s := &http.Server{
 				Addr:         opt.https,
 				ReadTimeout:  opt.readTimeout,
@@ -123,12 +121,10 @@ func ListenAndServeWithOption(opts ...Opts) {
 			if err := s.ListenAndServeTLS("", ""); err != nil {
 				fmt.Fprintf(os.Stdout, "%s [%s] %s\n", time.Now().Format(toolbox.ShortTimeFormat), "HTTP", "Start HTTPS server error: "+err.Error())
 			}
-		}()
+		})
 	}
 	if opt.http != "" {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			s := &http.Server{
 				Addr:         opt.http,
 				ReadTimeout:  opt.readTimeout,
@@ -140,7 +136,7 @@ func ListenAndServeWithOption(opts ...Opts) {
 			if err := s.ListenAndServe(); err != nil {
 				fmt.Fprintf(os.Stdout, "%s [%s] %s\n", time.Now().Format(toolbox.ShortTimeFormat), "HTTP", "Start HTTP server error: "+err.Error())
 			}
-		}()
+		})
 	}
 	wg.Wait()
 }

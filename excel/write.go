@@ -38,6 +38,7 @@ type ExcelizeFileJSON struct {
 	Sheets []ExcelizeSheetJSON `json:"sheets"`
 }
 
+// GetFileObject 获取Excel文件对象
 func (fd *FileData) GetFileObject() *xlsx.File {
 	return fd.writeFile
 }
@@ -162,6 +163,9 @@ func (fd *FileData) Save() (string, error) {
 	return fn, nil
 }
 
+// ToFile 将Excel数据保存到指定文件
+// f： 文件路径，可不加扩展名
+// 返回保存的完整文件名，错误
 func (fd *FileData) ToFile(f string) (string, error) {
 	fn := fd.fileName
 	if f != "" {
@@ -182,6 +186,7 @@ func (fd *FileData) ToFile(f string) (string, error) {
 	return fn, nil
 }
 
+// ToJSON 将Excel数据序列化为JSON字符串
 func (fd *FileData) ToJSON() (string, error) {
 	if fd == nil || fd.writeFile == nil {
 		return "", errors.New("excel-json序列化失败: 无效的excel对象")
@@ -213,6 +218,7 @@ func (fd *FileData) ToJSON() (string, error) {
 	return string(b), nil
 }
 
+// NewExcelFromJSON 从JSON数据创建Excel文件
 func NewExcelFromJSON(b []byte, filename string) (*FileData, error) {
 	var in ExcelizeFileJSON
 	if err := json.Unmarshal(b, &in); err != nil {
