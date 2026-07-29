@@ -110,7 +110,7 @@ func OptHTTPSFromFile(s, certFile, keyFile string) Opts {
 			opt.tlsc = nil
 			return
 		}
-		OptHTTPS(s, t)
+		OptHTTPS(s, t)(opt)
 	}
 }
 
